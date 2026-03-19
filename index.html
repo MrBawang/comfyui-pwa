@@ -5,411 +5,394 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="theme-color" content="#0d0d0f">
-<title>LuminaFlow Studio</title>
-<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<meta name="apple-mobile-web-app-title" content="AI画图">
+<meta name="theme-color" content="#0a0a0f">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<title>AI 画图</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500&family=Space+Mono&display=swap" rel="stylesheet">
 <style>
-/* ── Reset & Theme ───────────────────────────── */
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 :root{
-  --bg:#0d0d0f; --bg2:#16161a; --bg3:#1e1e24;
-  --border:#2a2a35; --border-active:#4a4a60;
-  --text:#e8e8f0; --text2:#8888a0; --text3:#4a4a60;
-  --accent:#7c6af7; --accent2:#a594ff; --accent-dim:#7c6af720;
-  --danger:#f75a5a; --success:#4af7a0;
-  --r:14px; --r-sm:8px;
-  --safe-top: env(safe-area-inset-top);
-  --safe-bot: env(safe-area-inset-bottom);
+  --bg:#0a0a0f;--bg2:#111118;--bg3:#1a1a24;
+  --border:#252530;--border-hi:#3a3a50;
+  --text:#ddddf0;--text2:#7777a0;--text3:#3a3a55;
+  --ac:#8b76ff;--ac2:#b0a0ff;--ac-dim:#8b76ff18;
+  --red:#ff6b6b;--green:#6bffb8;--amber:#ffcc6b;
+  --r:16px;--rsm:10px;
+  --st:env(safe-area-inset-top);--sb:env(safe-area-inset-bottom);
 }
 html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Noto Sans SC',sans-serif;font-weight:300;overflow:hidden}
-
-/* ── Layout ─────────────────────────────────── */
-#app{display:flex;flex-direction:column;height:100dvh;padding-top:var(--safe-top)}
-#topbar{
-  display:flex;align-items:center;justify-content:space-between;
-  padding:14px 20px 10px; border-bottom:1px solid var(--border);
-  background:var(--bg); z-index:10;
-}
-#topbar h1{font-family:'Space Mono',monospace;font-size:16px;color:var(--accent2);font-weight:700}
-
-/* ── Tabs ───────────────────────────────────── */
-#tabs{display:flex;padding:10px 16px 0;background:var(--bg)}
-.tab{
-  flex:1;padding:10px 4px;text-align:center;font-size:13px;color:var(--text2);
-  border-radius:var(--r-sm) var(--r-sm) 0 0;cursor:pointer;
-  border:1px solid transparent;border-bottom:none; transition:all .2s;
-}
-.tab.active{color:var(--accent2);background:var(--bg2);border-color:var(--border);font-weight:500}
-
-/* ── Panels ─────────────────────────────────── */
+#app{display:flex;flex-direction:column;height:100dvh;padding-top:var(--st)}
+#topbar{display:flex;align-items:center;justify-content:space-between;padding:12px 18px 10px;border-bottom:1px solid var(--border)}
+#topbar h1{font-family:'Space Mono',monospace;font-size:14px;letter-spacing:.1em;color:var(--ac2)}
+.pill{display:flex;align-items:center;gap:6px;padding:4px 10px;border-radius:99px;background:var(--bg3);border:1px solid var(--border);font-size:11px;color:var(--text2)}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--text3);flex-shrink:0}
+.dot.on{background:var(--green)}.dot.busy{background:var(--amber);animation:blink 1s ease-in-out infinite}.dot.err{background:var(--red)}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.2}}
+#tabs{display:flex;padding:10px 14px 0;gap:2px;background:var(--bg)}
+.tab{flex:1;padding:8px;text-align:center;font-size:12px;color:var(--text3);border-radius:var(--rsm) var(--rsm) 0 0;cursor:pointer;border:1px solid transparent;border-bottom:none;letter-spacing:.05em;transition:all .2s}
+.tab.active{color:var(--ac2);background:var(--bg2);border-color:var(--border)}
 #panels{flex:1;overflow:hidden;background:var(--bg2);border-top:1px solid var(--border)}
-.panel{display:none;flex-direction:column;height:100%;overflow-y:auto;padding:16px 16px calc(var(--safe-bot) + 30px)}
+.panel{display:none;flex-direction:column;height:100%;overflow-y:auto;padding:14px 16px calc(var(--sb) + 90px)}
 .panel.active{display:flex}
-
-/* ── UI Elements ─────────────────────────────── */
-.label{font-size:11px;color:var(--text3);letter-spacing:.1em;margin:16px 0 6px;text-transform:uppercase}
-textarea,input[type=text],select{
-  width:100%;background:var(--bg3);border:1px solid var(--border);
-  border-radius:var(--r-sm);color:var(--text);font-family:inherit;
-  font-size:14px;padding:10px 12px;outline:none;transition:border-color .2s;
-}
-textarea{min-height:80px;resize:vertical}
-select{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' fill='%238888a0'%3E%3Cpath d='M0 0l6 8 6-8z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;padding-right:32px}
-textarea:focus,select:focus,input:focus{border-color:var(--accent)}
-
-.btn{
-  width:100%;padding:14px;border:none;border-radius:var(--r-sm);
-  background:var(--accent);color:#fff;font-size:15px;font-weight:500;
-  cursor:pointer;transition:all .15s;display:flex;align-items:center;justify-content:center;gap:8px;
-}
-.btn:active{transform:scale(.98)}
-.btn-outline{background:transparent;border:1px dashed var(--border-active);color:var(--accent2)}
-
-/* ── Dynamic Form ───────────────────────────── */
-.dynamic-card{background:var(--bg3);border:1px solid var(--border);border-radius:var(--r-sm);padding:12px;margin-bottom:12px}
-.upload-area{
-  border:1px dashed var(--border-active);border-radius:var(--r-sm);
-  padding:16px;text-align:center;cursor:pointer;position:relative;
-}
-.upload-area img{max-width:100%;border-radius:4px;margin-top:8px;display:none}
-
-/* ── Tasks List ─────────────────────────────── */
-.task-item{
-  background:var(--bg3);border:1px solid var(--border);
-  border-radius:var(--r-sm);padding:14px;margin-bottom:12px;
-}
-.task-header{display:flex;justify-content:space-between;font-size:13px;margin-bottom:10px;color:var(--text)}
-.progress-bg{height:6px;background:var(--bg);border-radius:99px;overflow:hidden;position:relative}
-.progress-bar{height:100%;background:var(--accent2);width:0%;transition:width 0.5s ease-out;border-radius:99px}
-.task-done-btn{margin-top:10px;padding:8px;font-size:12px;display:none;background:var(--success);color:#000}
-
-/* ── Gallery Grid ───────────────────────────── */
-#gallery-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-.gallery-item{
-  position:relative;border-radius:var(--r-sm);overflow:hidden;
-  background:var(--bg3);border:1px solid var(--border);aspect-ratio:1;
-}
-.gallery-item img, .gallery-item video{width:100%;height:100%;object-fit:cover;display:block}
-.tag-badge{position:absolute;top:6px;left:6px;background:rgba(0,0,0,0.6);color:#fff;font-size:10px;padding:2px 6px;border-radius:4px}
-.del-btn{
-  position:absolute;top:6px;right:6px;background:var(--danger);color:#fff;
-  border:none;width:24px;height:24px;border-radius:50%;font-size:14px;
-  cursor:pointer;display:flex;align-items:center;justify-content:center;opacity:0.8;
-}
-
-/* ── Toast ───────────────────────────────────── */
-#toast{
-  position:fixed;top:calc(var(--safe-top) + 60px);left:50%;transform:translateX(-50%) translateY(-10px);
-  background:var(--text);color:var(--bg);padding:8px 16px;border-radius:99px;
-  font-size:13px;font-weight:500;opacity:0;transition:all .3s;pointer-events:none;z-index:999;
-}
+.panel::-webkit-scrollbar{width:2px}
+.panel::-webkit-scrollbar-thumb{background:var(--border-hi);border-radius:99px}
+.lbl{font-size:10px;color:var(--text3);letter-spacing:.12em;text-transform:uppercase;margin:14px 0 5px}
+textarea,input[type=text],select{width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:var(--rsm);color:var(--text);font-family:inherit;font-size:14px;padding:10px 12px;outline:none;resize:none;-webkit-appearance:none;transition:border-color .2s}
+textarea:focus,input:focus,select:focus{border-color:var(--ac)}
+textarea{min-height:90px;line-height:1.6}
+select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' fill='%237777a0'%3E%3Cpath d='M0 0l5 6 5-6z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;padding-right:30px}
+.sl-row{display:flex;align-items:center;gap:10px}
+input[type=range]{flex:1;-webkit-appearance:none;height:2px;border-radius:99px;outline:none;background:linear-gradient(to right,var(--ac) var(--p,50%),var(--border-hi) var(--p,50%))}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:18px;height:18px;border-radius:50%;background:var(--ac2);cursor:pointer;box-shadow:0 0 0 4px var(--ac-dim)}
+.sl-val{font-family:'Space Mono',monospace;font-size:12px;color:var(--ac2);min-width:36px;text-align:right}
+#result-card{border-radius:var(--r);overflow:hidden;background:var(--bg3);border:1px solid var(--border);min-height:140px;display:flex;align-items:center;justify-content:center;position:relative}
+#result-card img,#result-card video{width:100%;border-radius:var(--r);display:none}
+.result-ph{color:var(--text3);font-size:13px;text-align:center;line-height:2;padding:20px}
+#prog{display:none;position:absolute;inset:0;background:rgba(10,10,15,.88);align-items:center;justify-content:center;flex-direction:column;gap:10px;border-radius:var(--r)}
+#prog.show{display:flex}
+.spin{width:34px;height:34px;border:3px solid var(--border-hi);border-top-color:var(--ac);border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+#prog-time{font-family:'Space Mono',monospace;font-size:22px;color:var(--ac2)}
+#prog-txt{font-size:12px;color:var(--text2)}
+#result-btns{display:none;gap:8px;margin-top:8px}
+.rbtn{flex:1;padding:9px;border-radius:var(--rsm);border:1px solid var(--border);background:var(--bg3);color:var(--text2);font-size:12px;cursor:pointer;transition:all .2s;font-family:inherit}
+.rbtn:hover,.rbtn.hi{border-color:var(--ac);color:var(--ac2);background:var(--ac-dim)}
+#gen-bar{position:fixed;bottom:0;left:0;right:0;padding:10px 16px calc(var(--sb) + 8px);background:linear-gradient(to top,var(--bg) 60%,transparent);z-index:30}
+#gen-btn{width:100%;padding:14px;border:none;border-radius:var(--r);background:var(--ac);color:#fff;font-family:inherit;font-size:15px;font-weight:500;letter-spacing:.05em;cursor:pointer;transition:all .15s;display:flex;align-items:center;justify-content:center;gap:8px}
+#gen-btn:active{transform:scale(.98)}
+#gen-btn:disabled{background:var(--bg3);color:var(--text3);cursor:not-allowed;transform:none}
+#gallery-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.g-item{border-radius:var(--rsm);overflow:hidden;cursor:pointer;background:var(--bg3);border:1px solid var(--border);transition:border-color .2s;position:relative}
+.g-item:hover{border-color:var(--ac)}
+.g-item img,.g-item video{width:100%;aspect-ratio:1;object-fit:cover;display:block}
+.g-item video{pointer-events:none}
+.g-badge{position:absolute;top:5px;left:5px;background:rgba(0,0,0,.75);color:var(--ac2);font-size:9px;padding:2px 6px;border-radius:99px;font-family:'Space Mono',monospace}
+.g-del{position:absolute;top:4px;right:4px;background:rgba(0,0,0,.75);border:none;color:#fff;width:22px;height:22px;border-radius:50%;font-size:14px;cursor:pointer;display:none;align-items:center;justify-content:center}
+.g-item:hover .g-del{display:flex}
+#gallery-empty{text-align:center;color:var(--text3);padding:50px 0;font-size:13px}
+#lb{display:none;position:fixed;inset:0;background:rgba(0,0,0,.95);z-index:200;align-items:center;justify-content:center;padding:20px;flex-direction:column;gap:12px}
+#lb.show{display:flex}
+#lb img,#lb video{max-width:100%;max-height:80dvh;border-radius:var(--r);object-fit:contain}
+.lb-btn{background:var(--bg3);border:1px solid var(--border);color:var(--text2);padding:8px 20px;border-radius:99px;cursor:pointer;font-size:13px;font-family:inherit}
+.lb-btn.hi{background:var(--ac-dim);border-color:var(--ac);color:var(--ac2)}
+#toast{position:fixed;top:calc(var(--st) + 56px);left:50%;transform:translateX(-50%) translateY(-6px);background:var(--bg3);border:1px solid var(--border);padding:7px 16px;border-radius:99px;font-size:13px;opacity:0;transition:all .25s;white-space:nowrap;z-index:400;pointer-events:none}
 #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
-
-/* ── Lightbox ────────────────────────────────── */
-#lightbox{display:none;position:fixed;inset:0;background:rgba(0,0,0,.95);z-index:1000;align-items:center;justify-content:center;padding:20px}
-#lightbox.show{display:flex}
-#lightbox .media-content{max-width:100%;max-height:85dvh;border-radius:var(--r-sm)}
-#lightbox-close{position:absolute;top:20px;right:20px;background:none;border:none;color:#fff;font-size:32px;cursor:pointer}
+#toast.ok{border-color:var(--green);color:var(--green)}
+#toast.err{border-color:var(--red);color:var(--red)}
+#toast.info{border-color:var(--ac);color:var(--ac2)}
 </style>
 </head>
 <body>
 <div id="app">
   <div id="topbar">
-    <h1>LuminaFlow Studio</h1>
+    <h1>AI_STUDIO</h1>
+    <div class="pill"><div class="dot on" id="sdot"></div><span id="stxt">就绪</span></div>
   </div>
-
   <div id="tabs">
-    <div class="tab active" onclick="switchTab('workflow')">工作流</div>
-    <div class="tab" onclick="switchTab('tasks')">任务</div>
-    <div class="tab" onclick="switchTab('gallery')">资源库</div>
-    <div class="tab" onclick="switchTab('settings')">设置</div>
+    <div class="tab active" onclick="tab('generate')">生成</div>
+    <div class="tab" onclick="tab('params')">参数</div>
+    <div class="tab" onclick="tab('gallery')">资源库</div>
   </div>
-
   <div id="panels">
-    <!-- Panel: 工作流解析器 -->
-    <div class="panel active" id="panel-workflow">
-      <div class="label">1. 选择工作流</div>
-      <div style="display:flex;gap:8px">
-        <select id="wf-select" onchange="loadSelectedWorkflow()"></select>
-        <button class="btn btn-outline" style="width:auto;padding:10px" onclick="document.getElementById('wf-upload').click()">+ 导入</button>
-        <input type="file" id="wf-upload" accept=".json" style="display:none" onchange="importWorkflow(this)">
-      </div>
 
-      <div id="dynamic-form" style="margin-top:20px">
-        <div style="text-align:center;color:var(--text3);padding:40px 0;font-size:13px">请先导入 ComfyUI 导出的 JSON 文件<br>(开启开发者模式 -> Save API Format)</div>
+    <!-- 生成 -->
+    <div class="panel active" id="panel-generate">
+      <div class="lbl">正向提示词</div>
+      <textarea id="prompt" placeholder="描述你想生成的内容，支持中英文…" rows="4"></textarea>
+      <div class="lbl">反向提示词</div>
+      <textarea id="negative" rows="2" style="min-height:56px;font-size:12px;color:var(--text2)"></textarea>
+      <div class="lbl">生成结果</div>
+      <div id="result-card">
+        <div class="result-ph" id="result-ph">✦<br>输入提示词<br>点击下方按钮生成</div>
+        <img id="result-img" alt="" onclick="openLb(this.src,'img')">
+        <video id="result-vid" loop autoplay muted playsinline onclick="openLb(this.src,'vid')"></video>
+        <div id="prog">
+          <div class="spin"></div>
+          <div id="prog-time">0s</div>
+          <div id="prog-txt">启动引擎中（首次约30秒）…</div>
+        </div>
       </div>
-      
-      <button class="btn" id="btn-submit" style="display:none;margin-top:20px" onclick="submitTask()">🚀 提交云端渲染</button>
+      <div id="result-btns">
+        <button class="rbtn hi" onclick="saveResult()">保存</button>
+        <button class="rbtn" onclick="shareResult()">分享</button>
+        <button class="rbtn" onclick="tab('gallery');loadGallery()">资源库</button>
+      </div>
     </div>
 
-    <!-- Panel: 任务中心 -->
-    <div class="panel" id="panel-tasks">
-      <div id="task-list">
-        <div style="text-align:center;color:var(--text3);padding:40px 0;font-size:13px">当前无进行中的任务</div>
+    <!-- 参数 -->
+    <div class="panel" id="panel-params">
+      <div class="lbl">Modal API 地址</div>
+      <input type="text" id="api-url" placeholder="https://xxx--comfyui-pwa-api-fastapi-app.modal.run">
+      <small style="color:var(--text3);font-size:11px;margin-top:4px;display:block">部署后从终端复制，自动保存</small>
+
+      <div class="lbl">图片尺寸</div>
+      <select id="size">
+        <option value="720x1280">720 × 1280（竖版，默认）</option>
+        <option value="1280x720">1280 × 720（横版）</option>
+        <option value="1024x1024">1024 × 1024（方形）</option>
+        <option value="832x1216">832 × 1216（竖版备选）</option>
+      </select>
+
+      <div class="lbl">推理步数</div>
+      <div class="sl-row">
+        <input type="range" id="steps" min="4" max="30" value="10" oninput="sl(this,'steps-v',1)">
+        <span class="sl-val" id="steps-v">10</span>
+      </div>
+
+      <div class="lbl">CFG Scale</div>
+      <div class="sl-row">
+        <input type="range" id="cfg" min="10" max="150" value="10" oninput="sl(this,'cfg-v',0.1)">
+        <span class="sl-val" id="cfg-v">1.0</span>
+      </div>
+
+      <div style="margin-top:16px;padding:14px;background:var(--bg3);border-radius:var(--rsm);border:1px solid var(--border)">
+        <div style="font-size:11px;color:var(--text2);margin-bottom:8px">存储架构</div>
+        <div style="font-size:12px;color:var(--text3);line-height:2.2">
+          生成完成 → 上传到 Cloudflare R2<br>
+          图片直链，无需经过 Modal<br>
+          查看历史记录不消耗 GPU 费用<br>
+          模型：Z-image-ZiT-moodyPornMix v7<br>
+          放大：4x-UltraSharp × 2倍
+        </div>
       </div>
     </div>
 
-    <!-- Panel: 资源库 -->
+    <!-- 资源库 -->
     <div class="panel" id="panel-gallery">
-      <div style="display:flex;justify-content:space-between;margin-bottom:12px;align-items:center">
-        <div style="font-size:12px;color:var(--text2)">云端文件自动同步</div>
-        <button class="btn btn-outline" style="width:auto;padding:6px 12px;font-size:12px" onclick="fetchGallery()">刷新</button>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+        <span style="font-size:12px;color:var(--text2)" id="g-count">云端资源库</span>
+        <button class="rbtn" style="flex:0;padding:6px 12px;font-size:11px" onclick="loadGallery()">刷新</button>
       </div>
       <div id="gallery-grid"></div>
+      <div id="gallery-empty">
+        <div style="font-size:28px;margin-bottom:8px">🎨</div>
+        生成的图片保存在 Cloudflare R2<br>
+        <small style="color:var(--text3)">查看不消耗 Modal 费用</small>
+      </div>
     </div>
 
-    <!-- Panel: 设置 -->
-    <div class="panel" id="panel-settings">
-      <div class="label">API 地址 (Modal Endpoint)</div>
-      <input type="text" id="api-url" placeholder="https://your-modal-app.modal.run">
-    </div>
   </div>
+</div>
+
+<div id="gen-bar">
+  <button id="gen-btn" onclick="generate()">✦ 开始生成</button>
 </div>
 
 <div id="toast"></div>
 
-<!-- Lightbox -->
-<div id="lightbox" onclick="closeLightbox(event)">
-  <button id="lightbox-close">×</button>
-  <div id="lightbox-container" style="display:flex;justify-content:center;align-items:center;width:100%;height:100%"></div>
+<div id="lb" onclick="closeLb()">
+  <img id="lb-img" src="" alt="" style="display:none">
+  <video id="lb-vid" loop autoplay muted playsinline style="display:none"></video>
+  <div style="display:flex;gap:10px" onclick="event.stopPropagation()">
+    <button class="lb-btn hi" onclick="lbSave()">保存到相册</button>
+    <button class="lb-btn" onclick="closeLb()">关闭</button>
+  </div>
 </div>
 
 <script>
-// ==== 全局状态 ====
-let workflows = JSON.parse(localStorage.getItem('lumina_wfs')) || {};
-let currentWorkflow = null;
-let currentFiles = {}; // { node_id: File }
-let taskCounter = 1;
+const BASE_WORKFLOW = {"109":{"inputs":{"clip_name":"qwen_3_4b.safetensors","type":"lumina2","device":"default"},"class_type":"CLIPLoader"},"110":{"inputs":{"vae_name":"ae.safetensors"},"class_type":"VAELoader"},"111":{"inputs":{"width":720,"height":1280,"batch_size":1},"class_type":"EmptyLatentImage"},"112":{"inputs":{"purge_cache":true,"purge_models":true,"anything":["113",0]},"class_type":"LayerUtility: PurgeVRAM V2"},"113":{"inputs":{"upscale_by":2,"seed":["128",0],"steps":5,"cfg":1,"sampler_name":"euler","scheduler":"simple","denoise":0.3,"mode_type":"Linear","tile_width":["124",0],"tile_height":["124",1],"mask_blur":16,"tile_padding":64,"seam_fix_mode":"None","seam_fix_denoise":1,"seam_fix_width":64,"seam_fix_mask_blur":8,"seam_fix_padding":16,"force_uniform_tiles":true,"tiled_decode":false,"batch_size":1,"image":["122",0],"model":["117",0],"positive":["121",0],"negative":["114",0],"vae":["110",0],"upscale_model":["123",0]},"class_type":"UltimateSDUpscale"},"114":{"inputs":{"text":"拒绝, 限制, 不应答, lowres, error, cropped, worst quality, low quality, jpeg artifacts, heterochromia, out of frame, disfigured, blurry, fat, (ugly:1.3), deformed, mutilated, fingers cut, face cut, head cut, bad anatomy, bad proportions, two heads, two faces, deformed hands, (twisted fingers:1.22), extra fingers, poorly drawn, grainy, poorly drawn face, mutation, poor facial details, cropped head, poorly drawn eyes, unclear eyes, cross-eyes, malformed limbs, poorly drawn hands, fused hands, mutated hands, malformed hands, (mutated fingers:1.4), (fused fingers:1.313), interlocked fingers, extra or missing fingers, (one hand with more than 5 fingers), (one hand with less than 5 fingers), one hand with more than 5 digits, one hand with less than 5 digits, extra digits, fewer digits, bad hair, poorly drawn hair, fused hair, poorly drawn feet, malformed feet, extra or missing feet, fused feet, missing or extra limbs, disfigured, mutilated hands, extra hands, extra arms, extra legs, missing arms, missing hands, missing legs, fingers of different thickness, pointed fingers, thick fingers, (long thumbs:1.35), sharp fingernails, (greyscale:1.3), grain, (monochrome:1.3)","clip":["109",0]},"class_type":"CLIPTextEncode"},"115":{"inputs":{"purge_cache":true,"purge_models":true,"anything":["118",0]},"class_type":"LayerUtility: PurgeVRAM V2"},"116":{"inputs":{"filename_prefix":"ComfyUI","images":["112",0]},"class_type":"SaveImage"},"117":{"inputs":{"shift":3,"model":["120",0]},"class_type":"ModelSamplingAuraFlow"},"118":{"inputs":{"seed":["128",0],"steps":10,"cfg":1,"sampler_name":"euler","scheduler":"simple","denoise":1,"model":["117",0],"positive":["121",0],"negative":["114",0],"latent_image":["111",0]},"class_type":"KSampler"},"119":{"inputs":{"images":["122",0]},"class_type":"PreviewImage"},"120":{"inputs":{"unet_name":"z_image/Z-image-ZiT-moodyPornMix_zitV7-fp8.safetensors","weight_dtype":"default"},"class_type":"UNETLoader"},"121":{"inputs":{"text":"a beautiful landscape","clip":["109",0]},"class_type":"CLIPTextEncode"},"122":{"inputs":{"samples":["115",0],"vae":["110",0]},"class_type":"VAEDecode"},"123":{"inputs":{"model_name":"4x-UltraSharp.pth"},"class_type":"UpscaleModelLoader"},"124":{"inputs":{"image":["122",0]},"class_type":"GetImageSize+"},"128":{"inputs":{"seed":538814326877526},"class_type":"Seed (rgthree)"}};
 
-// 初始化
-document.getElementById('api-url').value = localStorage.getItem('lumina_api') || '';
-document.getElementById('api-url').addEventListener('blur', e => localStorage.setItem('lumina_api', e.target.value.trim()));
-updateWorkflowSelect();
+let busy=false, timer=null, elapsed=0, lastSrc=null, lastIsVid=false;
 
-// ==== 基础 UI 函数 ====
-function switchTab(name) {
-  document.querySelectorAll('.tab').forEach((t, i) => t.classList.toggle('active', ['workflow','tasks','gallery','settings'].indexOf(name) === i));
-  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
-  document.getElementById('panel-' + name).classList.add('active');
-  if(name === 'gallery') fetchGallery();
+function getApi(){return(localStorage.getItem('api_url')||'').replace(/\/$/,'')}
+
+document.addEventListener('DOMContentLoaded',()=>{
+  const saved=localStorage.getItem('api_url');
+  if(saved) document.getElementById('api-url').value=saved;
+  document.getElementById('api-url').addEventListener('blur',e=>{
+    localStorage.setItem('api_url',e.target.value.trim());
+  });
+  document.getElementById('negative').value='ugly, blurry, bad quality, watermark, deformed';
+  initSliders();
+});
+
+function tab(name){
+  document.querySelectorAll('.tab').forEach((t,i)=>t.classList.toggle('active',['generate','params','gallery'][i]===name));
+  document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+  document.getElementById('panel-'+name).classList.add('active');
+  if(name==='gallery') loadGallery();
 }
 
-function showToast(msg) {
-  const el = document.getElementById('toast');
-  el.textContent = msg; el.classList.add('show');
-  setTimeout(() => el.classList.remove('show'), 2500);
+function sl(el,valId,factor){
+  const pct=((el.value-el.min)/(el.max-el.min))*100;
+  el.style.setProperty('--p',pct+'%');
+  document.getElementById(valId).textContent=(el.value*factor).toFixed(factor<1?1:0);
+}
+function initSliders(){
+  document.querySelectorAll('input[type=range]').forEach(el=>{
+    const f=el.id==='cfg'?0.1:1;
+    sl(el,el.id+'-v',f);
+  });
 }
 
-// ==== 工作流处理 ====
-function importWorkflow(input) {
-  const file = input.files[0];
-  if(!file) return;
-  const reader = new FileReader();
-  reader.onload = e => {
-    try {
-      const json = JSON.parse(e.target.result);
-      const name = file.name.replace('.json', '');
-      workflows[name] = json;
-      localStorage.setItem('lumina_wfs', JSON.stringify(workflows));
-      updateWorkflowSelect(name);
-      showToast('工作流导入成功！');
-    } catch(err) { showToast('解析失败，请确保是合法的 JSON'); }
-  };
-  reader.readAsText(file);
-  input.value = '';
+function buildWorkflow(){
+  const wf=JSON.parse(JSON.stringify(BASE_WORKFLOW));
+  wf['121'].inputs.text=document.getElementById('prompt').value.trim();
+  wf['114'].inputs.text=document.getElementById('negative').value.trim()||wf['114'].inputs.text;
+  wf['118'].inputs.steps=parseInt(document.getElementById('steps').value);
+  wf['118'].inputs.cfg=parseFloat((document.getElementById('cfg').value*0.1).toFixed(1));
+  const[w,h]=document.getElementById('size').value.split('x').map(Number);
+  wf['111'].inputs.width=w; wf['111'].inputs.height=h;
+  return wf;
 }
 
-function updateWorkflowSelect(selectName = null) {
-  const sel = document.getElementById('wf-select');
-  sel.innerHTML = '<option value="">-- 选择工作流 --</option>';
-  for(let name in workflows) {
-    const opt = document.createElement('option');
-    opt.value = name; opt.textContent = name;
-    if(name === selectName) opt.selected = true;
-    sel.appendChild(opt);
-  }
-  if(selectName) loadSelectedWorkflow();
-}
+async function generate(){
+  if(busy) return;
+  const api=getApi();
+  if(!api){toast('请先在「参数」填写 API 地址','err');tab('params');return;}
+  const prompt=document.getElementById('prompt').value.trim();
+  if(!prompt){toast('请输入提示词','err');return;}
 
-// 核心：动态生成表单
-function loadSelectedWorkflow() {
-  const name = document.getElementById('wf-select').value;
-  const form = document.getElementById('dynamic-form');
-  const btn = document.getElementById('btn-submit');
-  currentFiles = {};
-  
-  if(!name) { form.innerHTML = ''; btn.style.display = 'none'; return; }
-  
-  currentWorkflow = JSON.parse(JSON.stringify(workflows[name])); // 深拷贝
-  form.innerHTML = '';
-  
-  let hasDynamicInputs = false;
+  busy=true;
+  setStatus('busy','生成中');
+  document.getElementById('gen-btn').disabled=true;
+  document.getElementById('gen-btn').textContent='生成中…';
+  document.getElementById('prog').classList.add('show');
+  elapsed=0;
+  document.getElementById('prog-time').textContent='0s';
+  document.getElementById('prog-txt').textContent='启动引擎中（首次约30秒）…';
+  timer=setInterval(()=>{
+    elapsed++;
+    document.getElementById('prog-time').textContent=elapsed+'s';
+    if(elapsed===20) document.getElementById('prog-txt').textContent='加载模型中…';
+    if(elapsed===45) document.getElementById('prog-txt').textContent='正在生成图片…';
+  },1000);
 
-  for(let id in currentWorkflow) {
-    const node = currentWorkflow[id];
-    
-    // 识别文本输入 (提示词)
-    if(node.class_type === 'CLIPTextEncode' && node.inputs && node.inputs.text !== undefined) {
-      hasDynamicInputs = true;
-      const card = document.createElement('div'); card.className = 'dynamic-card';
-      card.innerHTML = `<div class="label" style="margin-top:0">文本提示词 (Node ${id})</div>
-        <textarea onchange="currentWorkflow['${id}'].inputs.text = this.value">${node.inputs.text}</textarea>`;
-      form.appendChild(card);
-    }
-    
-    // 识别图片上传 (图生图/ControlNet)
-    if(node.class_type === 'LoadImage') {
-      hasDynamicInputs = true;
-      const card = document.createElement('div'); card.className = 'dynamic-card';
-      card.innerHTML = `<div class="label" style="margin-top:0">上传参考图 (Node ${id})</div>
-        <div class="upload-area" onclick="document.getElementById('file_${id}').click()">
-          <span class="ph">点击选择图片</span>
-          <img id="img_${id}">
-          <input type="file" id="file_${id}" accept="image/*" style="display:none" onchange="handleDynamicImage(this, '${id}')">
-        </div>`;
-      form.appendChild(card);
-    }
-  }
+  try{
+    const wf=buildWorkflow();
+    const fd=new FormData();
+    fd.append('workflow',JSON.stringify(wf));
+    const resp=await fetch(api+'/api/generate',{method:'POST',body:fd});
+    if(!resp.ok) throw new Error('HTTP '+resp.status);
+    const data=await resp.json();
+    if(data.status!=='ok'||!data.urls?.length) throw new Error('无返回图片');
 
-  if(!hasDynamicInputs) {
-    form.innerHTML = '<div style="color:var(--text2);font-size:13px;text-align:center;padding:20px">这是一个纯自动化工作流（没有找到提示词或图片节点），您可以直接执行。</div>';
-  }
-  btn.style.display = 'flex';
-}
-
-function handleDynamicImage(input, nodeId) {
-  const file = input.files[0];
-  if(!file) return;
-  currentFiles[nodeId] = file;
-  const reader = new FileReader();
-  reader.onload = e => {
-    const img = document.getElementById(`img_${nodeId}`);
-    img.src = e.target.result;
-    img.style.display = 'block';
-    input.parentElement.querySelector('.ph').style.display = 'none';
-  };
-  reader.readAsDataURL(file);
-}
-
-// ==== 提交任务与进度展示 ====
-async function submitTask() {
-  const api = document.getElementById('api-url').value;
-  if(!api) { showToast('请先在设置中填写 API 地址！'); switchTab('settings'); return; }
-  
-  // 创建 FormData
-  const fd = new FormData();
-  fd.append("workflow", JSON.stringify(currentWorkflow));
-  for(let id in currentFiles) {
-    fd.append(`file_${id}`, currentFiles[id]);
-  }
-
-  // UI 切换到任务列表并创建虚拟任务条
-  switchTab('tasks');
-  const taskList = document.getElementById('task-list');
-  if(taskList.innerHTML.includes('无进行中')) taskList.innerHTML = '';
-  
-  const tId = taskCounter++;
-  const taskHtml = `
-    <div class="task-item" id="task-${tId}">
-      <div class="task-header">
-        <span style="font-weight:500">云端任务 #${tId}</span>
-        <span id="ts-${tId}" style="color:var(--accent2)">处理中...</span>
-      </div>
-      <div class="progress-bg"><div class="progress-bar" id="pb-${tId}"></div></div>
-      <button class="btn task-done-btn" id="tbtn-${tId}" onclick="switchTab('gallery')">前往资源库查看</button>
-    </div>`;
-  taskList.insertAdjacentHTML('afterbegin', taskHtml);
-  
-  // 假进度条动画 (前40秒跑到90%)
-  const pb = document.getElementById(`pb-${tId}`);
-  setTimeout(() => pb.style.width = '85%', 100);
-  pb.style.transitionDuration = '40s';
-
-  try {
-    const res = await fetch(api + '/api/generate', { method: 'POST', body: fd });
-    const data = await res.json();
-    if(data.status === 'ok') {
-      document.getElementById(`ts-${tId}`).textContent = '已完成';
-      document.getElementById(`ts-${tId}`).style.color = 'var(--success)';
-      pb.style.transitionDuration = '0.5s';
-      pb.style.width = '100%';
-      document.getElementById(`tbtn-${tId}`).style.display = 'block';
-    } else throw new Error('生成失败');
-  } catch(err) {
-    document.getElementById(`ts-${tId}`).textContent = '失败';
-    document.getElementById(`ts-${tId}`).style.color = 'var(--danger)';
-    pb.style.width = '0%';
-    showToast('任务失败，请检查 API');
+    // 直接用 R2 公开直链，不经过 Modal
+    const url=data.urls[0];
+    const isVid=/\.(mp4|webm|gif)$/i.test(url);
+    showResult(url,isVid);
+    lastSrc=url; lastIsVid=isVid;
+    document.getElementById('result-btns').style.display='flex';
+    setStatus('on','就绪');
+    toast('生成完成，用时 '+elapsed+'s','ok');
+  }catch(err){
+    setStatus('err','错误');
+    toast('失败：'+err.message,'err');
+  }finally{
+    busy=false;
+    clearInterval(timer);
+    document.getElementById('prog').classList.remove('show');
+    document.getElementById('gen-btn').disabled=false;
+    document.getElementById('gen-btn').textContent='✦ 再次生成';
   }
 }
 
-// ==== 资源库获取与展示 ====
-async function fetchGallery() {
-  const api = document.getElementById('api-url').value;
-  if(!api) return;
-  const grid = document.getElementById('gallery-grid');
-  grid.innerHTML = '<div style="color:var(--text3);font-size:12px;grid-column:1/-1">加载中...</div>';
-  
-  try {
-    const res = await fetch(api + '/api/files');
-    const data = await res.json();
-    grid.innerHTML = '';
-    
-    if(!data.files || data.files.length === 0) {
-      grid.innerHTML = '<div style="color:var(--text3);font-size:12px;grid-column:1/-1">云端暂无资源</div>';
-      return;
-    }
-
-    data.files.forEach(item => {
-      const fileUrl = `${api}/api/files/${item.filename}`;
-      const div = document.createElement('div');
-      div.className = 'gallery-item';
-      
-      let mediaHtml = '';
-      if(item.type === 'video') {
-        mediaHtml = `<video src="${fileUrl}" autoplay loop muted playsinline onclick="openLightbox('${fileUrl}', 'video')"></video>`;
-      } else {
-        mediaHtml = `<img src="${fileUrl}" loading="lazy" onclick="openLightbox('${fileUrl}', 'image')">`;
-      }
-
-      div.innerHTML = `
-        ${mediaHtml}
-        <div class="tag-badge">${item.type.toUpperCase()}</div>
-        <button class="del-btn" onclick="deleteFile('${item.filename}')">🗑</button>
-      `;
-      grid.appendChild(div);
-    });
-  } catch(err) {
-    grid.innerHTML = '<div style="color:var(--danger);font-size:12px;grid-column:1/-1">获取失败，请检查 API 网络</div>';
-  }
+function showResult(src,isVid){
+  const ph=document.getElementById('result-ph');
+  const img=document.getElementById('result-img');
+  const vid=document.getElementById('result-vid');
+  if(ph) ph.style.display='none';
+  if(isVid){img.style.display='none';vid.src=src;vid.style.display='block';}
+  else{vid.style.display='none';vid.src='';img.src=src;img.style.display='block';}
 }
 
-async function deleteFile(filename) {
-  if(!confirm('确定删除云端的这份文件吗？')) return;
-  const api = document.getElementById('api-url').value;
-  try {
-    await fetch(api + '/api/files/' + filename, { method: 'DELETE' });
-    showToast('已删除');
-    fetchGallery();
-  } catch(e) { showToast('删除失败'); }
+async function saveResult(){
+  if(!lastSrc) return;
+  const a=document.createElement('a');
+  a.href=lastSrc;
+  a.download='ai-'+Date.now()+(lastIsVid?'.mp4':'.png');
+  a.click(); toast('已保存','ok');
+}
+async function shareResult(){
+  if(!lastSrc) return;
+  try{
+    const blob=await fetch(lastSrc).then(r=>r.blob());
+    const ext=lastIsVid?'mp4':'png';
+    const file=new File([blob],'ai-art.'+ext,{type:blob.type});
+    if(navigator.share&&navigator.canShare({files:[file]})){
+      await navigator.share({files:[file],title:'AI 生成',text:document.getElementById('prompt').value});
+    }else saveResult();
+  }catch{saveResult();}
 }
 
-// ==== Lightbox 大图预览 ====
-function openLightbox(url, type) {
-  const container = document.getElementById('lightbox-container');
-  if(type === 'video') {
-    container.innerHTML = `<video class="media-content" src="${url}" controls autoplay loop></video>`;
-  } else {
-    container.innerHTML = `<img class="media-content" src="${url}">`;
-  }
-  document.getElementById('lightbox').classList.add('show');
+// ── 资源库：直接读 R2 直链，不唤醒 Modal ────────────────────
+async function loadGallery(){
+  const api=getApi();
+  if(!api){renderGallery([]);return;}
+  toast('加载资源库…','info');
+  try{
+    const data=await fetch(api+'/api/files').then(r=>r.json());
+    renderGallery(data.files||[]);
+  }catch{toast('加载失败','err');}
 }
-function closeLightbox(e) {
-  if(e.target.id === 'lightbox' || e.target.id === 'lightbox-close') {
-    document.getElementById('lightbox').classList.remove('show');
-    document.getElementById('lightbox-container').innerHTML = ''; // 停止播放
-  }
+
+function renderGallery(files){
+  const grid=document.getElementById('gallery-grid');
+  const empty=document.getElementById('gallery-empty');
+  const count=document.getElementById('g-count');
+  grid.innerHTML='';
+  if(!files.length){empty.style.display='block';count.textContent='暂无文件';return;}
+  empty.style.display='none';
+  count.textContent='共 '+files.length+' 个文件';
+  files.forEach(f=>{
+    const isVid=f.type==='video';
+    const url=f.url; // R2 直链，直接用
+    const div=document.createElement('div');
+    div.className='g-item';
+    div.innerHTML=isVid
+      ?`<video src="${url}" loop autoplay muted playsinline></video>`
+      :`<img src="${url}" loading="lazy" alt="">`;
+    if(isVid) div.innerHTML+=`<span class="g-badge">VIDEO</span>`;
+    if(f.type==='gif') div.innerHTML+=`<span class="g-badge">GIF</span>`;
+    div.innerHTML+=`<button class="g-del" onclick="delFile('${f.filename}',event)">×</button>`;
+    div.querySelector(isVid?'video':'img').onclick=()=>openLb(url,isVid?'vid':'img');
+    grid.appendChild(div);
+  });
 }
+
+async function delFile(filename,e){
+  e.stopPropagation();
+  if(!confirm('删除这个文件？')) return;
+  const api=getApi();
+  await fetch(api+'/api/files/'+encodeURIComponent(filename),{method:'DELETE'});
+  toast('已删除','ok');
+  loadGallery();
+}
+
+function openLb(src,type){
+  const img=document.getElementById('lb-img');
+  const vid=document.getElementById('lb-vid');
+  if(type==='vid'){img.style.display='none';vid.src=src;vid.style.display='block';}
+  else{vid.style.display='none';vid.src='';img.src=src;img.style.display='block';}
+  document.getElementById('lb').classList.add('show');
+}
+function closeLb(){
+  document.getElementById('lb').classList.remove('show');
+  document.getElementById('lb-vid').src='';
+}
+function lbSave(){
+  const img=document.getElementById('lb-img');
+  const vid=document.getElementById('lb-vid');
+  const src=img.style.display!=='none'?img.src:vid.src;
+  const a=document.createElement('a');
+  a.href=src;a.download='ai-'+Date.now();a.click();
+}
+
+function setStatus(state,txt){
+  document.getElementById('sdot').className='dot '+state;
+  document.getElementById('stxt').textContent=txt;
+}
+let toastT;
+function toast(msg,type='info'){
+  const el=document.getElementById('toast');
+  el.textContent=msg;el.className='toast show '+type;
+  clearTimeout(toastT);
+  toastT=setTimeout(()=>el.classList.remove('show'),2800);
+}
+
+if('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(()=>{});
 </script>
 </body>
 </html>
