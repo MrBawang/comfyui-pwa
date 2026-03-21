@@ -26,7 +26,7 @@
   --sab:env(safe-area-inset-bottom);
   --font:-apple-system,'Helvetica Neue',sans-serif;
   --tab-h:83px;
-  --strip-h:96px; /* 底部资源条高度 */
+  --strip-h:96px; 
 }
 @media(prefers-color-scheme:dark){:root{
   --bg:#000;--bg2:#1c1c1e;--bg3:rgba(255,255,255,.07);--bg4:rgba(255,255,255,.10);
@@ -120,8 +120,8 @@ select{
 #result-wrap{
   background:var(--bg2);border-radius:var(--r);overflow:hidden;
   margin-bottom:10px;box-shadow:var(--sh);
-  min-height:260px;display:flex;flex-direction:column;
-  align-items:center;justify-content:center;position:relative;
+  min-height:260px;max-height:65dvh;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;position:relative;overflow:hidden;
 }
 #result-ph{display:flex;flex-direction:column;align-items:center;gap:10px;padding:40px 20px;color:var(--text3)}
 .ph-icon{width:52px;height:52px;border-radius:14px;background:var(--bg3);display:flex;align-items:center;justify-content:center;font-size:22px}
@@ -311,10 +311,10 @@ input[type=range]:active::-webkit-slider-thumb{transform:scale(1.15)}
 
       <div class="card" style="margin-top:10px">
         <div class="card-title">描述画面</div>
-        <textarea id="prompt" placeholder="描述你想生成的内容…" rows="4"></textarea>
+        <textarea id="prompt" placeholder="描述你想生成的内容（生成声音请明确描述出人物说话或环境音效）…" rows="4"></textarea>
       </div>
 
-      <!-- 参考图上传（图生视频等需要） -->
+      <!-- 参考图上传 -->
       <div class="card" id="img-card" style="display:none">
         <div class="card-title">参考图片</div>
         <div id="img-upload-area">
@@ -330,7 +330,8 @@ input[type=range]:active::-webkit-slider-thumb{transform:scale(1.15)}
           <div class="ph-text" id="ph-text">选择工作流，输入描述<br>点击生成按钮</div>
         </div>
         <img id="result-img" alt="" onclick="openLb(this.src,'img')">
-        <video id="result-vid" loop autoplay muted playsinline onclick="openLb(this.src,'vid')"></video>
+        <!-- 【重点】增加了 controls 控件，开启静音模式确保可以自动播放，点开就能调音量 -->
+        <video id="result-vid" controls muted loop autoplay playsinline onclick="openLb(this.src,'vid')" style="width:100%;display:none;border-radius:var(--r)"></video>
         <div id="prog">
           <div class="prog-arc">
             <svg viewBox="0 0 40 40" width="44" height="44">
@@ -371,6 +372,23 @@ input[type=range]:active::-webkit-slider-thumb{transform:scale(1.15)}
           <option value="1024x1024">1024 × 1024（方形）</option>
           <option value="832x1216">832 × 1216（竖版 2）</option>
         </select>
+        <!-- 视频专属参数 -->
+        <div id="vid-params" style="display:none">
+          <div class="info-row" style="padding-top:0;border-bottom:none">
+            <span class="info-label">视频时长（秒）</span>
+            <span class="info-val" id="dur-v">10</span>
+          </div>
+          <div class="sl-row" style="margin-bottom:14px">
+            <input type="range" id="duration" min="3" max="30" value="10" oninput="sl(this,'dur-v',1)">
+          </div>
+          <div class="info-row" style="padding-top:0;border-bottom:none">
+            <span class="info-label">帧率（FPS）</span>
+            <span class="info-val" id="fps-v">24</span>
+          </div>
+          <div class="sl-row" style="margin-bottom:14px">
+            <input type="range" id="fps" min="12" max="30" value="24" oninput="sl(this,'fps-v',1)">
+          </div>
+        </div>
         <div class="info-row" style="padding-top:0;border-bottom:none">
           <span class="info-label">推理步数</span>
           <span class="info-val" id="steps-v">10</span>
@@ -392,7 +410,7 @@ input[type=range]:active::-webkit-slider-thumb{transform:scale(1.15)}
         <div class="card-title">关于</div>
         <div class="info-row" style="padding-top:0"><span class="info-label">模型</span><span class="info-val">Z-image-ZiT v7</span></div>
         <div class="info-row"><span class="info-label">放大</span><span class="info-val">4x-UltraSharp × 2</span></div>
-        <div class="info-row"><span class="info-label">存储</span><span class="info-val">Cloudflare R2</span></div>
+        <div class="info-row"><span class="info-label">存储</span><span class="info-val">R2直链 (本地极速缓存)</span></div>
       </div>
     </div>
 
@@ -400,14 +418,13 @@ input[type=range]:active::-webkit-slider-thumb{transform:scale(1.15)}
     <div class="panel" id="panel-gallery">
       <div style="margin-top:10px;display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
         <span style="font-size:15px;font-weight:600" id="g-count">资源库</span>
-        <button onclick="loadGallery()" style="background:none;border:none;color:var(--ac);font-family:var(--font);font-size:14px;font-weight:500;cursor:pointer">刷新</button>
       </div>
       <div class="filter-row" id="g-filters"></div>
       <div class="g-grid" id="g-grid"></div>
       <div class="g-empty" id="g-empty" style="display:none">
         <div style="font-size:36px;margin-bottom:12px">🎨</div>
         暂无生成记录<br>
-        <span style="font-size:12px;color:var(--text3)">生成的图片自动保存到 R2</span>
+        <span style="font-size:12px;color:var(--text3)">历史记录将自动保存在浏览器本地</span>
       </div>
     </div>
 
@@ -446,7 +463,8 @@ input[type=range]:active::-webkit-slider-thumb{transform:scale(1.15)}
 <!-- Lightbox -->
 <div id="lb" onclick="closeLb()">
   <img id="lb-img" src="" alt="" style="display:none">
-  <video id="lb-vid" loop autoplay muted playsinline style="display:none"></video>
+  <!-- 【重点】增加了 controls 控件 -->
+  <video id="lb-vid" controls muted loop autoplay playsinline style="display:none;max-width:100%;max-height:80dvh;border-radius:var(--r)"></video>
   <div class="lb-actions" onclick="event.stopPropagation()">
     <button class="lb-btn primary" onclick="lbSave()">保存到相册</button>
     <button class="lb-btn" onclick="closeLb()">关闭</button>
@@ -464,10 +482,10 @@ let busy = false, timer = null, elapsed = 0;
 let lastSrc = null, lastIsVid = false;
 let toastT = null;
 let currentWf = 'txt2img';
-let workflows = {}; // 从 API 拉取
-let allFiles = []; // 全部资源
+let workflows = {}; 
+let allFiles = []; 
 let galleryFilter = 'all';
-let uploadedImage = null; // File object
+let uploadedImage = null;
 
 // ══════════════════════════════════════════════════════════════════
 // Init
@@ -487,6 +505,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   sl(document.getElementById('steps'), 'steps-v', 1);
   sl(document.getElementById('cfg'), 'cfg-v', 0.1);
+  const durEl = document.getElementById('duration');
+  const fpsEl = document.getElementById('fps');
+  if (durEl) sl(durEl, 'dur-v', 1);
+  if (fpsEl) sl(fpsEl, 'fps-v', 1);
 
   if (savedApi) await init();
 });
@@ -495,6 +517,30 @@ async function init() {
   await fetchWorkflows();
   checkConn();
   loadStrip();
+  if(document.getElementById('panel-gallery').classList.contains('active')) loadGallery();
+}
+
+// ══════════════════════════════════════════════════════════════════
+// Local Storage History Helper (彻底脱离 API)
+// ══════════════════════════════════════════════════════════════════
+function getHistory() {
+  try { return JSON.parse(localStorage.getItem('ai_gallery') || '[]'); }
+  catch { return []; }
+}
+
+function addToHistory(url, type) {
+  const history = getHistory();
+  history.unshift({
+    filename: url.split('/').pop(),
+    url: url,
+    type: type,
+    workflow: currentWf,
+    workflow_name: workflows[currentWf]?.name || currentWf,
+    last_modified: new Date().toISOString()
+  });
+  localStorage.setItem('ai_gallery', JSON.stringify(history));
+  loadStrip();
+  if(document.getElementById('panel-gallery').classList.contains('active')) loadGallery();
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -533,26 +579,21 @@ function selectWf(id) {
   const el = document.getElementById('wf-' + id);
   if (el) el.classList.add('active');
   const meta = workflows[id] || {};
-  // 显示/隐藏参考图上传
   document.getElementById('img-card').style.display = meta.requires_image ? 'block' : 'none';
-  // 更新占位图标
   document.getElementById('ph-icon').textContent = meta.icon || '✦';
+  const vidParams = document.getElementById('vid-params');
+  if (vidParams) vidParams.style.display = (meta.output_type === 'video') ? 'block' : 'none';
 }
 
-// ══════════════════════════════════════════════════════════════════
-// Image Upload
-// ══════════════════════════════════════════════════════════════════
 function onImageSelect(input) {
   const file = input.files[0];
   if (!file) return;
   uploadedImage = file;
   const preview = document.getElementById('upload-preview');
-  const hint = document.getElementById('upload-hint');
-  const area = document.getElementById('img-upload-area');
+  document.getElementById('upload-hint').style.display = 'none';
+  document.getElementById('img-upload-area').classList.add('has-img');
   preview.src = URL.createObjectURL(file);
   preview.style.display = 'block';
-  hint.style.display = 'none';
-  area.classList.add('has-img');
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -584,7 +625,7 @@ async function generate() {
     document.getElementById('prog-time').textContent = elapsed + 's';
     if (elapsed === 20) document.getElementById('prog-label').textContent = '加载模型中…';
     if (elapsed === 50) document.getElementById('prog-label').textContent = '正在生成…';
-    if (elapsed === 90) document.getElementById('prog-label').textContent = '正在放大…';
+    if (elapsed === 90) document.getElementById('prog-label').textContent = '正在放大或合成中…';
   }, 1000);
 
   try {
@@ -595,6 +636,8 @@ async function generate() {
       steps: parseInt(document.getElementById('steps').value),
       cfg: parseFloat((document.getElementById('cfg').value * 0.1).toFixed(1)),
       width: w, height: h,
+      duration: parseInt(document.getElementById('duration')?.value || 10),
+      fps: parseInt(document.getElementById('fps')?.value || 24),
     };
 
     const fd = new FormData();
@@ -615,8 +658,8 @@ async function generate() {
     setStatus('ready', '就绪');
     toast('完成，用时 ' + elapsed + 's ✓');
 
-    // 刷新资源条（后台）
-    loadStrip();
+    // 存入本地缓存！
+    addToHistory(first.url, first.type);
 
   } catch(err) {
     setStatus('error', '失败');
@@ -638,22 +681,15 @@ function showResult(src, isVid) {
 }
 
 // ══════════════════════════════════════════════════════════════════
-// Bottom Strip（常驻资源条）
+// Bottom Strip（常驻资源条，全本地读取）
 // ══════════════════════════════════════════════════════════════════
-async function loadStrip() {
-  const api = getApi();
-  if (!api) return;
-  try {
-    const data = await fetch(api + '/api/files?limit=20').then(r => r.json());
-    allFiles = data.files || [];
-    renderStrip(allFiles);
-  } catch {}
+function loadStrip() {
+  renderStrip(getHistory());
 }
 
 function renderStrip(files) {
   const strip = document.getElementById('strip');
   const empty = document.getElementById('strip-empty');
-  // 保留 + 按钮
   strip.innerHTML = '';
   const newBtn = document.createElement('div');
   newBtn.className = 'strip-new'; newBtn.title = '新建生成'; newBtn.textContent = '＋';
@@ -671,34 +707,25 @@ function renderStrip(files) {
     const isVid = f.type === 'video';
     const div = document.createElement('div');
     div.className = 'strip-item';
-    if (isVid) {
-      div.innerHTML = `<video src="${f.url}" loop autoplay muted playsinline></video><div class="strip-vid-icon">▶</div>`;
-    } else {
-      div.innerHTML = `<img src="${f.url}" loading="lazy" alt="">`;
-    }
+    if (isVid) div.innerHTML = `<video src="${f.url}" loop autoplay muted playsinline></video><div class="strip-vid-icon">▶</div>`;
+    else div.innerHTML = `<img src="${f.url}" loading="lazy" alt="">`;
     div.onclick = () => openLb(f.url, isVid ? 'vid' : 'img');
     strip.appendChild(div);
   });
 }
 
 // ══════════════════════════════════════════════════════════════════
-// Gallery
+// Gallery（本地秒开版资源库）
 // ══════════════════════════════════════════════════════════════════
-async function loadGallery() {
-  const api = getApi();
-  if (!api) { renderGallery([]); return; }
-  try {
-    const data = await fetch(api + '/api/files?limit=100').then(r => r.json());
-    allFiles = data.files || [];
-    renderGalleryFilters();
-    renderGallery(allFiles);
-  } catch { toast('加载失败'); }
+function loadGallery() {
+  allFiles = getHistory();
+  renderGalleryFilters();
+  filterGallery();
 }
 
 function renderGalleryFilters() {
   const row = document.getElementById('g-filters');
   row.innerHTML = '';
-  // 收集所有工作流类型
   const wfIds = [...new Set(allFiles.map(f => f.workflow))];
   const chips = [{ id: 'all', label: '全部' }];
   wfIds.forEach(id => chips.push({ id, label: (workflows[id]?.name || id) }));
@@ -727,13 +754,11 @@ function renderGallery(files) {
   files.forEach(f => {
     const isVid = f.type === 'video';
     const div = document.createElement('div'); div.className = 'g-item';
-    if (isVid) {
-      div.innerHTML = `<video src="${f.url}" loop autoplay muted playsinline></video><div class="g-badge">VIDEO</div>`;
-    } else if (f.type === 'gif') {
-      div.innerHTML = `<img src="${f.url}" loading="lazy" alt=""><div class="g-badge">GIF</div>`;
-    } else {
-      div.innerHTML = `<img src="${f.url}" loading="lazy" alt="">`;
-    }
+    // 缩略图一律静音播放以符合浏览器安全策略
+    if (isVid) div.innerHTML = `<video src="${f.url}" loop autoplay muted playsinline></video><div class="g-badge">VIDEO</div>`;
+    else if (f.type === 'gif') div.innerHTML = `<img src="${f.url}" loading="lazy" alt=""><div class="g-badge">GIF</div>`;
+    else div.innerHTML = `<img src="${f.url}" loading="lazy" alt="">`;
+    
     if (f.workflow_name) div.innerHTML += `<div class="g-wf-badge">${f.workflow_name}</div>`;
     div.innerHTML += `<button class="g-del" onclick="delFile('${f.filename}',event)">×</button>`;
     div.querySelector(isVid ? 'video' : 'img').onclick = () => openLb(f.url, isVid?'vid':'img');
@@ -743,15 +768,23 @@ function renderGallery(files) {
 
 async function delFile(filename, e) {
   e.stopPropagation();
-  if (!confirm('删除这个文件？')) return;
-  const api = getApi();
-  await fetch(api + '/api/files/' + encodeURIComponent(filename), { method:'DELETE' });
+  if (!confirm('删除此文件？记录将立刻在前端清除。')) return;
+  
+  // 1. 本地光速删除，瞬间提升体验
+  let history = getHistory();
+  history = history.filter(f => f.filename !== filename);
+  localStorage.setItem('ai_gallery', JSON.stringify(history));
   toast('已删除');
-  loadGallery(); loadStrip();
+  loadGallery(); 
+  loadStrip();
+  
+  // 2. 异步打扫战场：默默向云端发送删除请求以清理 R2 空间（不管是否成功都不报错）
+  const api = getApi();
+  if (api) { fetch(api + '/api/files/' + encodeURIComponent(filename), { method:'DELETE' }).catch(()=>{}); }
 }
 
 // ══════════════════════════════════════════════════════════════════
-// Save / Share
+// Save / Share / Lightbox
 // ══════════════════════════════════════════════════════════════════
 async function saveResult() {
   if (!lastSrc) return;
@@ -777,9 +810,6 @@ async function shareResult() {
   } catch { await saveResult(); }
 }
 
-// ══════════════════════════════════════════════════════════════════
-// Lightbox
-// ══════════════════════════════════════════════════════════════════
 function openLb(src, type) {
   const img = document.getElementById('lb-img');
   const vid = document.getElementById('lb-vid');
