@@ -48,6 +48,9 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
 }
 .nav-title{font-size:17px;font-weight:600;letter-spacing:-.3px}
 .nav-status{display:flex;align-items:center;gap:5px;font-size:12px;color:var(--text2)}
+#nav-status-btn:hover{background:var(--bg3)}
+#nav-status-btn:active{background:var(--bg4)}
+.sdot.connecting{background:#ff9f0a;animation:sdot-pulse 0.6s ease-in-out infinite}
 .sdot{width:6px;height:6px;border-radius:50%;background:var(--text3);transition:background .3s;flex-shrink:0}
 .sdot.ready{background:#34c759}.sdot.busy{background:#ff9f0a;animation:sdot-pulse 1.2s ease-in-out infinite}.sdot.error{background:#ff3b30}
 @keyframes sdot-pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.4;transform:scale(.75)}}
@@ -298,7 +301,7 @@ input[type=range]:active::-webkit-slider-thumb{transform:scale(1.15)}
   <!-- Navbar -->
   <div id="navbar">
     <span class="nav-title">AI Studio</span>
-    <div class="nav-status">
+    <div class="nav-status" id="nav-status-btn" onclick="manualConnect()" style="cursor:pointer;padding:4px 8px;border-radius:99px;transition:background .15s;-webkit-tap-highlight-color:transparent" title="点击连接">
       <div class="sdot" id="sdot"></div>
       <span id="stxt">未连接</span>
     </div>
@@ -365,6 +368,14 @@ input[type=range]:active::-webkit-slider-thumb{transform:scale(1.15)}
         <div style="font-size:12px;color:var(--text3);margin-top:8px">部署后从终端复制，自动保存</div>
         <button id="refresh-wf-btn" onclick="refreshWorkflows()" style="margin-top:10px;width:100%;padding:10px;border:none;border-radius:var(--rsm);background:var(--bg3);color:var(--ac);font-family:var(--font);font-size:14px;font-weight:500;cursor:pointer;">刷新工作流</button>
       </div>
+      <div class="card">
+        <div class="card-title">R2 直连配置（资源库不经过 Modal）</div>
+        <input type="text" id="r2-worker-url" placeholder="https://your-worker.workers.dev" autocorrect="off" autocapitalize="none" spellcheck="false">
+        <div style="font-size:12px;color:var(--text3);margin-top:6px;line-height:1.6">
+          部署 Cloudflare Worker 后填入地址<br>
+          资源库同步将直接连接 R2，不唤醒 Modal
+        </div>
+      </div>
 
       <div class="card">
         <div class="card-title">生成参数</div>
@@ -423,13 +434,15 @@ input[type=range]:active::-webkit-slider-thumb{transform:scale(1.15)}
     <div class="panel" id="panel-gallery">
       <div style="margin-top:10px;display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
         <span style="font-size:15px;font-weight:600" id="g-count">资源库</span>
+        <button id="gallery-refresh-btn" onclick="refreshGallery()" style="background:none;border:none;color:var(--ac);font-family:var(--font);font-size:14px;font-weight:500;cursor:pointer;padding:4px 0">同步 R2</button>
       </div>
       <div class="filter-row" id="g-filters"></div>
       <div class="g-grid" id="g-grid"></div>
-      <div class="g-empty" id="g-empty" style="display:none">
+      <div class="g-empty" id="g-empty">
         <div style="font-size:36px;margin-bottom:12px">🎨</div>
-        暂无生成记录<br>
-        <span style="font-size:12px;color:var(--text3)">历史记录将自动保存在浏览器本地</span>
+        <div style="font-size:32px;margin-bottom:8px">🎨</div>
+        还没有生成记录<br>
+        <span style="font-size:12px;color:var(--text3)">生成完成后自动保存到此处</span>
       </div>
     </div>
 
@@ -552,11 +565,16 @@ async function init() {
 // ══════════════════════════════════════════════════════════════════
 // Local Storage History Helper (彻底脱离 API)
 // ══════════════════════════════════════════════════════════════════
-function getHistory() {
-  try { return JSON.parse(localStorage.getItem('ai_gallery') || '[]'); }
+// 本地缓存（R2 文件列表的镜像，供离线/快速读取）
+function getGalleryCache() {
+  try { return JSON.parse(localStorage.getItem('r2_gallery_cache') || '[]'); }
   catch { return []; }
 }
+function setGalleryCache(files) {
+  localStorage.setItem('r2_gallery_cache', JSON.stringify(files));
+}
 
+// 生成完成后把新结果插入缓存顶部
 function addToHistory(url, type) {
   const item = {
     filename: url.split('/').pop(),
@@ -566,13 +584,71 @@ function addToHistory(url, type) {
     workflow_name: workflows[currentWf]?.name || currentWf,
     last_modified: new Date().toISOString()
   };
-  // 加入本地历史（跨 session 持久化）
-  const history = getHistory();
-  history.unshift(item);
-  localStorage.setItem('ai_gallery', JSON.stringify(history.slice(0, 200)));
-  // 加入本次 session（只在底部资源条显示）
-  sessionFiles.unshift(item);
-  if(document.getElementById('panel-gallery').classList.contains('active')) loadGallery();
+  // 插入本地缓存顶部
+  const cache = getGalleryCache();
+  cache.unshift(item);
+  setGalleryCache(cache.slice(0, 500));
+  // 同步更新资源库面板（如果正在查看）
+  allFiles = getGalleryCache();
+  if (document.getElementById('panel-gallery').classList.contains('active')) {
+    renderGalleryFilters(); filterGallery();
+  }
+}
+
+function getR2Worker() { return (localStorage.getItem('r2_worker_url') || '').replace(/\/$/, ''); }
+
+// 手动同步：优先直连 R2 Worker，无 Worker 则走 Modal
+async function refreshGallery() {
+  const btn = document.getElementById('gallery-refresh-btn');
+  if (btn) { btn.textContent = '同步中…'; btn.disabled = true; }
+  document.getElementById('g-count').textContent = '同步中…';
+
+  const r2Worker = getR2Worker();
+  const modalApi = getApi();
+
+  if (!r2Worker && !modalApi) {
+    toast('请先在「参数」填写 API 地址或 R2 Worker 地址');
+    if (btn) { btn.textContent = '同步 R2'; btn.disabled = false; }
+    allFiles = getGalleryCache(); renderGalleryFilters(); filterGallery();
+    return;
+  }
+
+  try {
+    let files = [];
+    if (r2Worker) {
+      // 直连 R2 Worker（不唤醒 Modal）
+      const data = await fetch(r2Worker + '/list').then(r => r.json());
+      files = (data.files || []).map(f => ({
+        filename: f.key,
+        url: f.url,
+        type: /\.(mp4|webm)$/i.test(f.key) ? 'video' : 'image',
+        workflow: f.key.split('/')[0] || 'unknown',
+        workflow_name: '',
+        last_modified: f.uploaded || new Date().toISOString(),
+      }));
+      toast('R2 直连同步完成 · ' + files.length + ' 个文件 ✓');
+    } else {
+      // Fallback：经 Modal 获取（会唤醒容器）
+      toast('未配置 R2 Worker，通过 Modal 同步…');
+      const data = await fetch(modalApi + '/api/files?limit=500').then(r => r.json());
+      files = (data.files || []).map(f => ({
+        filename: f.filename, url: f.url, type: f.type,
+        workflow: f.workflow || 'unknown',
+        workflow_name: f.workflow_name || '',
+        last_modified: f.last_modified || new Date().toISOString(),
+      }));
+      toast('已同步 ' + files.length + ' 个文件 ✓');
+    }
+    setGalleryCache(files);
+    allFiles = files;
+    renderGalleryFilters(); filterGallery();
+  } catch(e) {
+    toast('同步失败：' + e.message);
+    allFiles = getGalleryCache();
+    renderGalleryFilters(); filterGallery();
+  } finally {
+    if (btn) { btn.textContent = '同步 R2'; btn.disabled = false; }
+  }
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -802,19 +878,10 @@ function renderStrip() {
 // Gallery（本地秒开版资源库）
 // ══════════════════════════════════════════════════════════════════
 function loadGallery() {
-  // 显示加载动画
-  const grid = document.getElementById('g-grid');
-  const count = document.getElementById('g-count');
-  const empty = document.getElementById('g-empty');
-  grid.innerHTML = '<div style="grid-column:1/-1;display:flex;justify-content:center;padding:40px 0"><div class="gallery-spinner"></div></div>';
-  count.textContent = '加载中…';
-  empty.style.display = 'none';
-  // 用 setTimeout 让动画先渲染出来再同步读取
-  setTimeout(() => {
-    allFiles = getHistory();
-    renderGalleryFilters();
-    filterGallery();
-  }, 60);
+  // 从本地缓存秒开，点「同步 R2」才联网
+  allFiles = getGalleryCache();
+  renderGalleryFilters();
+  filterGallery();
 }
 
 function renderGalleryFilters() {
@@ -842,7 +909,7 @@ function renderGallery(files) {
   const empty = document.getElementById('g-empty');
   const count = document.getElementById('g-count');
   grid.innerHTML = '';
-  if (!files.length) { empty.style.display='block'; count.textContent='资源库'; return; }
+  if (!files.length) { empty.style.display='block'; count.textContent='资源库'; grid.innerHTML=''; return; }
   empty.style.display = 'none';
   count.textContent = files.length + ' 项';
   files.forEach(f => {
@@ -862,19 +929,16 @@ function renderGallery(files) {
 
 async function delFile(filename, e) {
   e.stopPropagation();
-  if (!confirm('删除此文件？记录将立刻在前端清除。')) return;
-  
-  // 1. 本地光速删除，瞬间提升体验
-  let history = getHistory();
-  history = history.filter(f => f.filename !== filename);
-  localStorage.setItem('ai_gallery', JSON.stringify(history));
+  if (!confirm('删除此文件？将同时从 R2 删除。')) return;
+  // 立即从本地缓存移除
+  const cache = getGalleryCache().filter(f => f.filename !== filename);
+  setGalleryCache(cache);
+  allFiles = cache;
   toast('已删除');
-  loadGallery(); 
-  loadStrip();
-  
-  // 2. 异步打扫战场：默默向云端发送删除请求以清理 R2 空间（不管是否成功都不报错）
+  renderGalleryFilters(); filterGallery();
+  // 后台异步从 R2 删除
   const api = getApi();
-  if (api) { fetch(api + '/api/files/' + encodeURIComponent(filename), { method:'DELETE' }).catch(()=>{}); }
+  if (api) fetch(api + '/api/files/' + encodeURIComponent(filename), { method: 'DELETE' }).catch(() => {});
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -967,9 +1031,37 @@ function toast(msg) {
 async function checkConn() {
   const api = getApi(); if (!api) return;
   try {
-    const r = await fetch(api+'/', { signal: AbortSignal.timeout(5000) });
-    setStatus(r.ok?'ready':'error', r.ok?'就绪':'错误');
-  } catch { setStatus('error','无法连接'); }
+    const r = await fetch(api + '/api/workflows', { signal: AbortSignal.timeout(8000) });
+    setStatus(r.ok ? 'ready' : 'error', r.ok ? '已连接' : '连接失败');
+  } catch { setStatus('error', '连接失败'); }
+}
+
+// 手动点击触发连接（有动画）
+async function manualConnect() {
+  if (busy) return;
+  const api = getApi();
+  if (!api) { toast('请先在「参数」填写 API 地址'); return; }
+  const dot = document.getElementById('sdot');
+  const txt = document.getElementById('stxt');
+  dot.className = 'sdot connecting';
+  txt.textContent = '连接中…';
+  try {
+    const resp = await fetch(api + '/api/workflows', { signal: AbortSignal.timeout(15000) });
+    if (resp.ok) {
+      const data = await resp.json();
+      workflows = data.workflows || {};
+      localStorage.setItem('cached_workflows', JSON.stringify(workflows));
+      renderWfBar(workflows);
+      setStatus('ready', '已连接');
+      toast('连接成功，工作流已更新 ✓');
+    } else {
+      setStatus('error', '连接失败');
+      toast('服务器返回错误 ' + resp.status);
+    }
+  } catch(e) {
+    setStatus('error', '连接失败');
+    toast('无法连接：' + e.message);
+  }
 }
 
 if('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(()=>{});
