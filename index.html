@@ -156,7 +156,7 @@ select{
 #result-actions{display:none;padding:10px 14px;gap:8px;width:100%}
 .act-btn{
   flex:1;padding:10px 8px;border:none;border-radius:var(--rsm);
-  background:var(--bg3);color:var(--ac);
+  background:var(--bg3);color:var(--text);
   font-family:var(--font);font-size:14px;font-weight:500;
   cursor:pointer;transition:all .15s;-webkit-appearance:none;
 }
@@ -350,8 +350,8 @@ input[type=range]:active::-webkit-slider-thumb{transform:scale(1.15)}
         </div>
         <div id="result-actions">
           <button class="act-btn primary" onclick="saveResult()">保存</button>
+          <button class="act-btn" id="extend-btn" onclick="extendVideo()" style="display:none; color:var(--ac); background:var(--ac2)">🪄 续写</button>
           <button class="act-btn" onclick="shareResult()">分享</button>
-          <button class="act-btn" onclick="switchTab('gallery')">资源库</button>
         </div>
       </div>
 
@@ -742,7 +742,6 @@ async function generate() {
 
   try {
     const [w, h] = document.getElementById('size').value.split('x').map(Number);
-    // ✅ 新增传入 upscale 参数
     const params = {
       prompt,
       negative: document.getElementById('negative').value.trim(),
@@ -771,6 +770,7 @@ async function generate() {
     const isVid = first.type === 'video';
     showResult(first.url, isVid);
     lastSrc = first.url; lastIsVid = isVid;
+    
     document.getElementById('result-actions').style.display = 'flex';
     setStatus('ready', '就绪');
     toast('完成，用时 ' + elapsed + 's ✓');
@@ -793,8 +793,84 @@ function showResult(src, isVid) {
   document.getElementById('result-ph').style.display = 'none';
   const img = document.getElementById('result-img');
   const vid = document.getElementById('result-vid');
-  if (isVid) { img.style.display='none'; vid.src=src; vid.style.display='block'; }
-  else { vid.style.display='none'; vid.src=''; img.src=src; img.style.display='block'; }
+  const extBtn = document.getElementById('extend-btn'); // 获取续写按钮
+  
+  if (isVid) { 
+    img.style.display='none'; 
+    vid.src=src; 
+    vid.style.display='block'; 
+    if(extBtn) extBtn.style.display='block'; // 只有视频才显示续写
+  } else { 
+    vid.style.display='none'; 
+    vid.src=''; 
+    img.src=src; 
+    img.style.display='block'; 
+    if(extBtn) extBtn.style.display='none'; 
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════
+// 🪄 视频无缝续写 (截取最后一帧)
+// ══════════════════════════════════════════════════════════════════
+async function extendVideo() {
+  if (!lastSrc || !lastIsVid) return;
+  toast('正在提取视频最后一帧...');
+  
+  try {
+    // 1. 通过 fetch 下载视频避免 Canvas 跨域污染 (CORS Taint)
+    const resp = await fetch(lastSrc);
+    const vidBlob = await resp.blob();
+    const vidUrl = URL.createObjectURL(vidBlob);
+    
+    // 2. 创建静音隐藏的视频元素用于截图
+    const tempVid = document.createElement('video');
+    tempVid.src = vidUrl;
+    tempVid.muted = true;
+    tempVid.playsInline = true;
+    
+    // 3. 视频元数据加载后，跳转到几乎最后一帧 (减去0.05秒确保不黑屏)
+    tempVid.addEventListener('loadeddata', () => {
+      tempVid.currentTime = Math.max(0, tempVid.duration - 0.05);
+    });
+    
+    // 4. 跳转完成后进行截图
+    tempVid.addEventListener('seeked', () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = tempVid.videoWidth;
+      canvas.height = tempVid.videoHeight;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(tempVid, 0, 0, canvas.width, canvas.height);
+      
+      canvas.toBlob((blob) => {
+        URL.revokeObjectURL(vidUrl); // 释放内存
+        if (!blob) { toast('提取帧失败'); return; }
+        
+        // 5. 伪装成用户上传的文件
+        const file = new File([blob], 'extend_frame.png', { type: 'image/png' });
+        uploadedImage = file;
+        
+        // 6. 更新 UI 的上传图片区域
+        const preview = document.getElementById('upload-preview');
+        document.getElementById('upload-hint').style.display = 'none';
+        document.getElementById('img-upload-area').classList.add('has-img');
+        preview.src = URL.createObjectURL(blob);
+        preview.style.display = 'block';
+        
+        // 7. 确保切换到 Wan2 视频流
+        if (currentWf !== 'wan2vid') {
+           selectWf('wan2vid');
+        }
+        
+        // 8. 滚动到顶部并提示用户
+        switchTab('create');
+        document.getElementById('panels').scrollTo({top: 0, behavior: 'smooth'});
+        toast('最后一帧提取成功！请修改动作提示词后生成');
+        
+      }, 'image/png');
+    });
+  } catch (e) {
+    toast('提取失败：' + e.message);
+  }
 }
 
 // ══════════════════════════════════════════════════════════════════
