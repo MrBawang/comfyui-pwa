@@ -6,6 +6,9 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="AI Studio">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <meta name="theme-color" content="#f5f5f7" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#000000"  media="(prefers-color-scheme: dark)">
 <link rel="manifest" href="manifest.json">
@@ -321,6 +324,41 @@ input[type=range]:active::-webkit-slider-thumb{transform:scale(1.15)}
         <textarea id="prompt" placeholder="描述你想生成的内容（生成声音请明确描述出人物说话或环境音效）…" rows="4"></textarea>
       </div>
 
+      <!-- 视频参数（选视频工作流时显示）-->
+      <div class="card" id="vid-params-card" style="display:none">
+        <div class="card-title">视频参数</div>
+        <div class="info-row" style="padding-top:0">
+          <span class="info-label">尺寸</span>
+          <select id="vid-size" style="width:auto;padding:4px 28px 4px 8px;font-size:13px;background:var(--bg3);border:none;border-radius:var(--rxs);color:var(--text)">
+            <option value="480x832">480 × 832（竖版）</option>
+            <option value="832x480">832 × 480（横版）</option>
+            <option value="720x1280">720 × 1280（高清竖）</option>
+            <option value="1280x720">1280 × 720（高清横）</option>
+          </select>
+        </div>
+        <div class="info-row">
+          <span class="info-label">时长（秒）</span>
+          <div style="display:flex;align-items:center;gap:8px;flex:1;justify-content:flex-end">
+            <input type="range" id="duration" min="3" max="30" value="5" oninput="sl(this,'dur-v',1)" style="width:120px">
+            <span class="info-val" id="dur-v" style="min-width:28px">5</span>
+          </div>
+        </div>
+        <div class="info-row">
+          <span class="info-label">帧率（FPS）</span>
+          <div style="display:flex;align-items:center;gap:8px;flex:1;justify-content:flex-end">
+            <input type="range" id="fps" min="12" max="30" value="16" oninput="sl(this,'fps-v',1)" style="width:120px">
+            <span class="info-val" id="fps-v" style="min-width:28px">16</span>
+          </div>
+        </div>
+        <div class="info-row" style="padding-bottom:0;border-bottom:none">
+          <span class="info-label">推理步数</span>
+          <div style="display:flex;align-items:center;gap:8px;flex:1;justify-content:flex-end">
+            <input type="range" id="vid-steps" min="4" max="30" value="30" oninput="sl(this,'vid-steps-v',1)" style="width:120px">
+            <span class="info-val" id="vid-steps-v" style="min-width:28px">30</span>
+          </div>
+        </div>
+      </div>
+
       <!-- 参考图上传 -->
       <div class="card" id="img-card" style="display:none">
         <div class="card-title">参考图片</div>
@@ -379,8 +417,8 @@ input[type=range]:active::-webkit-slider-thumb{transform:scale(1.15)}
 
       <div class="card">
         <div class="card-title">生成参数</div>
-        <div class="info-row" style="padding-top:0;border-bottom:none">
-          <span class="info-label">图片尺寸</span>
+        <div class="info-row" id="img-size-row" style="padding-top:0;border-bottom:none;flex-direction:column;align-items:flex-start">
+          <span class="info-label" style="margin-bottom:6px">图片尺寸</span>
         </div>
         <select id="size" style="margin-bottom:14px">
           <option value="720x1280">720 × 1280（竖版）</option>
@@ -388,8 +426,8 @@ input[type=range]:active::-webkit-slider-thumb{transform:scale(1.15)}
           <option value="1024x1024">1024 × 1024（方形）</option>
           <option value="832x1216">832 × 1216（竖版 2）</option>
         </select>
-        <!-- 视频专属参数 -->
-        <div id="vid-params" style="display:none">
+        <!-- 视频参数已移至生成页 -->
+        <div id="vid-params-settings" style="display:none">
           <div class="info-row" style="padding-top:0;border-bottom:none">
             <span class="info-label">视频时长（秒）</span>
             <span class="info-val" id="dur-v">10</span>
@@ -527,8 +565,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   sl(document.getElementById('cfg'), 'cfg-v', 0.1);
   const durEl = document.getElementById('duration');
   const fpsEl = document.getElementById('fps');
+  const vidStepsEl = document.getElementById('vid-steps');
   if (durEl) sl(durEl, 'dur-v', 1);
   if (fpsEl) sl(fpsEl, 'fps-v', 1);
+  if (vidStepsEl) sl(vidStepsEl, 'vid-steps-v', 1);
 
   // 恢复本地工作流缓存（无网络请求）
   const cached = localStorage.getItem('cached_workflows');
@@ -683,10 +723,15 @@ function selectWf(id) {
   const el = document.getElementById('wf-' + id);
   if (el) el.classList.add('active');
   const meta = workflows[id] || {};
+  const isVid = meta.output_type === 'video';
   document.getElementById('img-card').style.display = meta.requires_image ? 'block' : 'none';
   document.getElementById('ph-icon').textContent = meta.icon || '✦';
-  const vidParams = document.getElementById('vid-params');
-  if (vidParams) vidParams.style.display = (meta.output_type === 'video') ? 'block' : 'none';
+  // 视频参数卡片（生成页）
+  const vpc = document.getElementById('vid-params-card');
+  if (vpc) vpc.style.display = isVid ? 'block' : 'none';
+  // 图片尺寸参数（参数页）仅在图片模式显示
+  const imgSize = document.getElementById('img-size-row');
+  if (imgSize) imgSize.style.display = isVid ? 'none' : 'flex';
 }
 
 function onImageSelect(input) {
@@ -751,15 +796,19 @@ async function generate() {
   }, 1000);
 
   try {
-    const [w, h] = document.getElementById('size').value.split('x').map(Number);
+    const isVidWf = (workflows[currentWf]?.output_type === 'video');
+    const sizeEl = isVidWf ? document.getElementById('vid-size') : document.getElementById('size');
+    const [w, h] = (sizeEl?.value || '720x1280').split('x').map(Number);
     const params = {
       prompt,
       negative: document.getElementById('negative').value.trim(),
-      steps: parseInt(document.getElementById('steps').value),
+      steps: isVidWf
+        ? parseInt(document.getElementById('vid-steps')?.value || 30)
+        : parseInt(document.getElementById('steps').value),
       cfg: parseFloat((document.getElementById('cfg').value * 0.1).toFixed(1)),
       width: w, height: h,
-      duration: parseInt(document.getElementById('duration')?.value || 10),
-      fps: parseInt(document.getElementById('fps')?.value || 24),
+      duration: parseInt(document.getElementById('duration')?.value || 5),
+      fps: parseInt(document.getElementById('fps')?.value || 16),
     };
     const fd = new FormData();
     fd.append('workflow_id', currentWf);
