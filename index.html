@@ -2,6 +2,10 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -67,6 +71,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
   font-size:13px;font-weight:500;cursor:pointer;
   border:1.5px solid transparent;
   transition:all .15s;white-space:nowrap;
+  font-family:var(--font);-webkit-appearance:none;outline:none;
 }
 .wf-pill.active{background:var(--ac2);color:var(--ac);border-color:var(--ac)}
 .wf-pill:active{opacity:.7}
@@ -192,7 +197,7 @@ input[type=range]:active::-webkit-slider-thumb{transform:scale(1.15)}
 /* ── Filter Tabs ── */
 .filter-row{display:flex;gap:6px;margin-bottom:12px;overflow-x:auto;scrollbar-width:none}
 .filter-row::-webkit-scrollbar{display:none}
-.f-chip{flex-shrink:0;padding:5px 12px;border-radius:99px;background:var(--bg3);color:var(--text2);font-size:12px;font-weight:500;cursor:pointer;border:1.5px solid transparent;white-space:nowrap}
+.f-chip{flex-shrink:0;padding:5px 12px;border-radius:99px;background:var(--bg3);color:var(--text2);font-size:12px;font-weight:500;cursor:pointer;border:1.5px solid transparent;white-space:nowrap;font-family:var(--font);-webkit-appearance:none;outline:none}
 .f-chip.active{background:var(--ac2);color:var(--ac);border-color:var(--ac)}
 
 /* ── Bottom Strip (常驻资源条) ── */
@@ -248,7 +253,7 @@ input[type=range]:active::-webkit-slider-thumb{transform:scale(1.15)}
   #tabbar{background:rgba(245,245,247,.88);backdrop-filter:blur(20px) saturate(180%);-webkit-backdrop-filter:blur(20px) saturate(180%)}
   @media(prefers-color-scheme:dark){#tabbar{background:rgba(0,0,0,.88)}}
 }
-.tab-item{display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;padding:6px 14px;flex:1;transition:opacity .15s}
+.tab-item{display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;padding:6px 14px;flex:1;transition:opacity .15s;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
 .tab-item:active{opacity:.6}
 .tab-icon{width:28px;height:28px;display:flex;align-items:center;justify-content:center;border-radius:8px;transition:background .15s}
 .tab-item.active .tab-icon{background:var(--ac2)}
@@ -298,7 +303,6 @@ input[type=range]:active::-webkit-slider-thumb{transform:scale(1.15)}
 <body>
 <div id="app">
 
-  <!-- Navbar -->
   <div id="navbar">
     <span class="nav-title">AI Studio</span>
     <div class="nav-status" id="nav-status-btn" onclick="manualConnect()" style="cursor:pointer;padding:4px 8px;border-radius:99px;transition:background .15s;-webkit-tap-highlight-color:transparent" title="点击连接">
@@ -307,13 +311,10 @@ input[type=range]:active::-webkit-slider-thumb{transform:scale(1.15)}
     </div>
   </div>
 
-  <!-- Workflow Selector -->
   <div id="wf-bar"></div>
 
-  <!-- Panels -->
   <div id="panels">
 
-    <!-- 生成 -->
     <div class="panel active" id="panel-create">
 
       <div class="card" style="margin-top:10px">
@@ -321,7 +322,6 @@ input[type=range]:active::-webkit-slider-thumb{transform:scale(1.15)}
         <textarea id="prompt" placeholder="描述你想生成的内容（生成声音请明确描述出人物说话或环境音效）…" rows="4"></textarea>
       </div>
 
-      <!-- 参考图上传 -->
       <div class="card" id="img-card" style="display:none">
         <div class="card-title">参考图片</div>
         <div id="img-upload-area">
@@ -337,7 +337,6 @@ input[type=range]:active::-webkit-slider-thumb{transform:scale(1.15)}
           <div class="ph-text" id="ph-text">选择工作流，输入描述<br>点击生成按钮</div>
         </div>
         <img id="result-img" alt="" onclick="openLb(this.src,'img')">
-        <!-- 【重点】增加了 controls 控件，开启静音模式确保可以自动播放，点开就能调音量 -->
         <video id="result-vid" controls muted loop autoplay playsinline onclick="openLb(this.src,'vid')" style="width:100%;display:none;border-radius:var(--r)"></video>
         <div id="prog">
           <div class="prog-arc">
@@ -360,7 +359,6 @@ input[type=range]:active::-webkit-slider-thumb{transform:scale(1.15)}
 
     </div>
 
-    <!-- 参数 -->
     <div class="panel" id="panel-settings">
       <div class="card" style="margin-top:10px">
         <div class="card-title">API 配置</div>
@@ -388,7 +386,6 @@ input[type=range]:active::-webkit-slider-thumb{transform:scale(1.15)}
           <option value="1024x1024">1024 × 1024（方形）</option>
           <option value="832x1216">832 × 1216（竖版 2）</option>
         </select>
-        <!-- 视频专属参数 -->
         <div id="vid-params" style="display:none">
           <div class="info-row" style="padding-top:0;border-bottom:none">
             <span class="info-label">视频时长（秒）</span>
@@ -430,7 +427,6 @@ input[type=range]:active::-webkit-slider-thumb{transform:scale(1.15)}
       </div>
     </div>
 
-    <!-- 资源库 -->
     <div class="panel" id="panel-gallery">
       <div style="margin-top:10px;display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
         <span style="font-size:15px;font-weight:600" id="g-count">资源库</span>
@@ -446,14 +442,10 @@ input[type=range]:active::-webkit-slider-thumb{transform:scale(1.15)}
       </div>
     </div>
 
-  </div><!-- /panels -->
-
-  <!-- 任务队列条 -->
-  <div id="strip">
+  </div><div id="strip">
     <div class="strip-empty" id="strip-empty">暂无任务</div>
   </div>
 
-  <!-- Tab Bar -->
   <div id="tabbar">
     <div class="tab-item active" id="tab-create" onclick="switchTab('create')">
       <div class="tab-icon">
@@ -475,12 +467,8 @@ input[type=range]:active::-webkit-slider-thumb{transform:scale(1.15)}
     </div>
   </div>
 
-</div><!-- /app -->
-
-<!-- Lightbox -->
-<div id="lb" onclick="closeLb()">
+</div><div id="lb" onclick="closeLb()">
   <img id="lb-img" src="" alt="" style="display:none">
-  <!-- 【重点】增加了 controls 控件 -->
   <video id="lb-vid" controls muted loop autoplay playsinline style="display:none;max-width:100%;max-height:80dvh;border-radius:var(--r)"></video>
   <div class="lb-actions" onclick="event.stopPropagation()">
     <button class="lb-btn primary" onclick="lbSave()">保存到相册</button>
@@ -488,7 +476,6 @@ input[type=range]:active::-webkit-slider-thumb{transform:scale(1.15)}
   </div>
 </div>
 
-<!-- Toast -->
 <div id="toast"></div>
 
 <script>
@@ -540,16 +527,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (durEl) sl(durEl, 'dur-v', 1);
   if (fpsEl) sl(fpsEl, 'fps-v', 1);
 
-  // 恢复本地工作流缓存（无网络请求）
-  const cached = localStorage.getItem('cached_workflows');
-  if (cached) {
-    try { workflows = JSON.parse(cached); renderWfBar(workflows); } catch {}
-  } else {
-    renderWfBar({ txt2img: { name:'Z-image 质感', icon:'✦', output_type:'image', requires_image:false },
-                  txt2vid: { name:'LTX 视频', icon:'🎬', output_type:'video', requires_image:false },
-                  wan2vid: { name:'Wan2 图生视频', icon:'🎥', output_type:'video', requires_image:true } });
-  }
-  loadStrip();
+  init();
 });
 
 async function init() {
@@ -564,12 +542,31 @@ async function init() {
     // 首次使用才拉取
     await fetchWorkflows();
   }
-  // 后台静默刷新工作流（不阻塞页面）
+  
+  // 后台静默刷新工作流
   fetchWorkflows().then(() => {
     localStorage.setItem('cached_workflows', JSON.stringify(workflows));
   }).catch(() => {});
-  // 不在启动时 checkConn，避免唤醒容器
+  
+  // 1. 先秒速加载本地历史记录
   loadStrip();
+  if(document.getElementById('panel-gallery').classList.contains('active')) {
+    loadGallery();
+  }
+
+  // 2. 后台静默同步 R2 最新资源
+  if (getR2Worker()) {
+    r2List().then(files => {
+      setGalleryCache(files); // 更新本地缓存
+      allFiles = files;
+      // 如果当前正好停留在资源库页面，无缝刷新画面
+      if(document.getElementById('panel-gallery').classList.contains('active')) {
+        renderGalleryFilters(); 
+        filterGallery();
+      }
+      loadStrip(); // 刷新底部的最近任务条
+    }).catch(() => {}); 
+  }
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -598,9 +595,10 @@ function addToHistory(url, type) {
   const cache = getGalleryCache();
   cache.unshift(item);
   setGalleryCache(cache.slice(0, 500));
-  // 同步更新资源库面板（如果正在查看）
+  // 同步更新资源库面板
   allFiles = getGalleryCache();
-  if (document.getElementById('panel-gallery').classList.contains('active')) {
+  const galleryPanel = document.getElementById('panel-gallery');
+  if (galleryPanel && galleryPanel.classList.contains('active')) {
     renderGalleryFilters(); filterGallery();
   }
 }
@@ -678,7 +676,8 @@ function renderWfBar(wfs) {
   const entries = Object.entries(wfs);
   if (!entries.length) return;
   entries.forEach(([id, meta]) => {
-    const pill = document.createElement('div');
+    const pill = document.createElement('button');
+    pill.type = 'button';
     pill.className = 'wf-pill' + (id === currentWf ? ' active' : '');
     pill.textContent = (meta.icon || '') + ' ' + meta.name;
     pill.onclick = () => selectWf(id);
@@ -891,11 +890,19 @@ function renderGalleryFilters() {
   const wfIds = [...new Set(allFiles.map(f => f.workflow))];
   const chips = [{ id: 'all', label: '全部' }];
   wfIds.forEach(id => chips.push({ id, label: (workflows[id]?.name || id) }));
+  
   chips.forEach(({ id, label }) => {
-    const c = document.createElement('div');
+    const c = document.createElement('button');
     c.className = 'f-chip' + (galleryFilter === id ? ' active' : '');
     c.textContent = label;
-    c.onclick = () => { galleryFilter = id; renderGalleryFilters(); filterGallery(); };
+    c.type = 'button';
+    c.onclick = () => { 
+      galleryFilter = id; 
+      // 修复苹果端 Tag 切换失效问题：不销毁重建 DOM，直接修改样式
+      Array.from(row.children).forEach(btn => btn.classList.remove('active'));
+      c.classList.add('active');
+      filterGallery(); 
+    };
     row.appendChild(c);
   });
 }
@@ -1014,7 +1021,9 @@ function switchTab(name) {
   document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
   document.getElementById('tab-'+name).classList.add('active');
   document.getElementById('panel-'+name).classList.add('active');
-  if (name==='gallery') loadGallery();
+  if (name==='gallery') {
+    setTimeout(loadGallery, 200);
+  }
 }
 function sl(el, vid, factor) {
   document.getElementById(vid).textContent = (el.value*factor).toFixed(factor<1?1:0);
