@@ -381,6 +381,7 @@ input[type=range]:active::-webkit-slider-thumb{transform:scale(1.15)}
           <span class="info-label">图片尺寸</span>
         </div>
         <select id="size" style="margin-bottom:14px">
+          <option value="480x832" selected>480 × 832（Wan2 推荐）</option>
           <option value="720x1280">720 × 1280（竖版）</option>
           <option value="1280x720">1280 × 720（横版）</option>
           <option value="1024x1024">1024 × 1024（方形）</option>
@@ -389,17 +390,17 @@ input[type=range]:active::-webkit-slider-thumb{transform:scale(1.15)}
         <div id="vid-params" style="display:none">
           <div class="info-row" style="padding-top:0;border-bottom:none">
             <span class="info-label">视频时长（秒）</span>
-            <span class="info-val" id="dur-v">10</span>
+            <span class="info-val" id="dur-v">5</span>
           </div>
           <div class="sl-row" style="margin-bottom:14px">
-            <input type="range" id="duration" min="3" max="30" value="10" oninput="sl(this,'dur-v',1)">
+            <input type="range" id="duration" min="3" max="30" value="5" oninput="sl(this,'dur-v',1)">
           </div>
           <div class="info-row" style="padding-top:0;border-bottom:none">
             <span class="info-label">帧率（FPS）</span>
-            <span class="info-val" id="fps-v">24</span>
+            <span class="info-val" id="fps-v">16</span>
           </div>
           <div class="sl-row" style="margin-bottom:14px">
-            <input type="range" id="fps" min="12" max="30" value="24" oninput="sl(this,'fps-v',1)">
+            <input type="range" id="fps" min="12" max="30" value="16" oninput="sl(this,'fps-v',1)">
           </div>
         </div>
         <div class="info-row" style="padding-top:0;border-bottom:none">
@@ -501,7 +502,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   const savedApi = localStorage.getItem('api_url');
   if (savedApi) document.getElementById('api-url').value = savedApi;
   
-  // ✅ 修改1：离开输入框仅保存至本地，彻底断开与 Modal 的静默连接
   document.getElementById('api-url').addEventListener('blur', e => {
     localStorage.setItem('api_url', e.target.value.trim());
   });
@@ -531,8 +531,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 async function init() {
-  // ✅ 修改2：启动网页时，完全依赖本地缓存。如果没有缓存，则提供一份安全的离线后备名单。
-  // 绝对不会在后台主动唤醒 Modal 去拉取列表！
   const cached = localStorage.getItem('cached_workflows');
   if (cached) {
     try {
@@ -548,13 +546,11 @@ async function init() {
     renderWfBar(workflows);
   }
   
-  // 初始化纯本地和 Cloudflare 直连资源
   loadStrip();
   if(document.getElementById('panel-gallery').classList.contains('active')) {
     loadGallery();
   }
 
-  // 纯静态访问 Cloudflare，完全绕过 Modal
   if (getR2Worker()) {
     r2List().then(files => {
       setGalleryCache(files); 
@@ -569,7 +565,7 @@ async function init() {
 }
 
 // ══════════════════════════════════════════════════════════════════
-// Local Storage History Helper (彻底脱离 API)
+// Local Storage History Helper
 // ══════════════════════════════════════════════════════════════════
 function getGalleryCache() {
   try { return JSON.parse(localStorage.getItem('r2_gallery_cache') || '[]'); }
@@ -740,8 +736,9 @@ async function generate() {
       steps: parseInt(document.getElementById('steps').value),
       cfg: parseFloat((document.getElementById('cfg').value * 0.1).toFixed(1)),
       width: w, height: h,
-      duration: parseInt(document.getElementById('duration')?.value || 10),
-      fps: parseInt(document.getElementById('fps')?.value || 24),
+      // ✅ 确保前端传给后端的是正确的默认安全数值
+      duration: parseInt(document.getElementById('duration')?.value || 5),
+      fps: parseInt(document.getElementById('fps')?.value || 16),
     };
     const fd = new FormData();
     fd.append('workflow_id', currentWf);
@@ -971,7 +968,7 @@ function lbSave() {
 }
 
 // ══════════════════════════════════════════════════════════════════
-// Utils (包含主动连接 Modal)
+// Utils (主动连接 Modal)
 // ══════════════════════════════════════════════════════════════════
 function getApi() { return (localStorage.getItem('api_url')||'').replace(/\/$/,''); }
 function switchTab(name) {
@@ -996,7 +993,7 @@ function toast(msg) {
   clearTimeout(toastT); toastT = setTimeout(()=>el.classList.remove('show'), 2800);
 }
 
-// ✅ 修改3：单独封装给“刷新工作流”按钮，强行唤醒并同步
+// 单独封装给“刷新工作流”按钮，强行唤醒并同步
 async function refreshWorkflows() {
   await manualConnect();
 }
