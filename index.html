@@ -183,6 +183,8 @@ input[type=range]:active::-webkit-slider-thumb{transform:scale(1.15)}
 .g-del{position:absolute;top:5px;right:5px;width:24px;height:24px;border-radius:50%;background:rgba(0,0,0,.5);backdrop-filter:blur(8px);border:none;color:#fff;font-size:14px;display:none;align-items:center;justify-content:center;cursor:pointer}
 .g-item:hover .g-del{display:flex}
 .g-empty{text-align:center;color:var(--text3);padding:60px 20px;font-size:14px;line-height:2}
+.gallery-spinner{width:28px;height:28px;border:2.5px solid var(--sep);border-top-color:var(--ac);border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
 
 /* ── Filter Tabs ── */
 .filter-row{display:flex;gap:6px;margin-bottom:12px;overflow-x:auto;scrollbar-width:none}
@@ -209,26 +211,27 @@ input[type=range]:active::-webkit-slider-thumb{transform:scale(1.15)}
   @media(prefers-color-scheme:dark){#strip{background:rgba(0,0,0,.88)}}
 }
 
-.strip-empty{font-size:12px;color:var(--text3);white-space:nowrap;padding:0 4px}
-
-.strip-item{
-  flex-shrink:0;width:68px;height:68px;border-radius:10px;overflow:hidden;
-  cursor:pointer;position:relative;
-  box-shadow:var(--sh);
-  transition:transform .15s;
+.strip-empty{font-size:12px;color:var(--text3);white-space:nowrap;padding:0 8px}
+/* 任务卡片 */
+.task-card{
+  flex-shrink:0;display:flex;align-items:center;gap:10px;
+  background:var(--bg2);border-radius:var(--rsm);
+  padding:8px 12px;box-shadow:var(--sh);cursor:pointer;
+  min-width:200px;max-width:280px;
+  border:1px solid var(--sep);transition:border-color .2s;
 }
-.strip-item:active{transform:scale(.95)}
-.strip-item img,.strip-item video{width:100%;height:100%;object-fit:cover;display:block}
-.strip-item video{pointer-events:none}
-.strip-vid-icon{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.25);font-size:18px}
-.strip-new{
-  flex-shrink:0;width:68px;height:68px;border-radius:10px;
-  display:flex;align-items:center;justify-content:center;
-  background:var(--bg3);color:var(--text3);font-size:22px;
-  cursor:pointer;border:1.5px dashed var(--sep);
-  transition:all .15s;
-}
-.strip-new:active{background:var(--bg4);color:var(--ac)}
+.task-card:active{border-color:var(--ac)}
+.task-thumb{flex-shrink:0;width:44px;height:44px;border-radius:8px;overflow:hidden;background:var(--bg3);display:flex;align-items:center;justify-content:center;position:relative}
+.task-thumb img,.task-thumb video{width:100%;height:100%;object-fit:cover;display:block}
+.task-thumb .t-spin{width:18px;height:18px;border:2px solid var(--sep);border-top-color:var(--ac);border-radius:50%;animation:spin .7s linear infinite}
+.task-thumb .t-err{font-size:18px}
+.task-info{flex:1;min-width:0}
+.task-prompt{font-size:12px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text)}
+.task-meta{font-size:11px;color:var(--text3);margin-top:2px;display:flex;align-items:center;gap:4px}
+.task-status-dot{width:5px;height:5px;border-radius:50%;flex-shrink:0}
+.task-status-dot.running{background:#ff9f0a}
+.task-status-dot.done{background:#34c759}
+.task-status-dot.error{background:#ff3b30}
 
 /* ── Tab Bar ── */
 #tabbar{
@@ -271,7 +274,8 @@ input[type=range]:active::-webkit-slider-thumb{transform:scale(1.15)}
   gap:20px;padding:calc(var(--sat)+20px) 20px calc(var(--sab)+20px);
 }
 #lb.show{display:flex}
-#lb img,#lb video{max-width:100%;max-height:75dvh;border-radius:var(--r);object-fit:contain}
+#lb img{max-width:100%;max-height:80dvh;border-radius:var(--r);object-fit:contain;cursor:zoom-in}
+#lb video{max-width:100%;max-height:80dvh;border-radius:var(--r);object-fit:contain}
 .lb-actions{display:flex;gap:10px}
 .lb-btn{padding:12px 24px;border-radius:99px;border:none;font-family:var(--font);font-size:15px;font-weight:500;cursor:pointer;-webkit-appearance:none;background:rgba(255,255,255,.15);color:#fff;transition:opacity .15s}
 .lb-btn.primary{background:#fff;color:#1d1d1f}
@@ -359,6 +363,7 @@ input[type=range]:active::-webkit-slider-thumb{transform:scale(1.15)}
         <div class="card-title">API 配置</div>
         <input type="text" id="api-url" placeholder="https://xxx.modal.run" autocorrect="off" autocapitalize="none" spellcheck="false">
         <div style="font-size:12px;color:var(--text3);margin-top:8px">部署后从终端复制，自动保存</div>
+        <button id="refresh-wf-btn" onclick="refreshWorkflows()" style="margin-top:10px;width:100%;padding:10px;border:none;border-radius:var(--rsm);background:var(--bg3);color:var(--ac);font-family:var(--font);font-size:14px;font-weight:500;cursor:pointer;">刷新工作流</button>
       </div>
 
       <div class="card">
@@ -367,7 +372,6 @@ input[type=range]:active::-webkit-slider-thumb{transform:scale(1.15)}
           <span class="info-label">图片尺寸</span>
         </div>
         <select id="size" style="margin-bottom:14px">
-          <option value="480x832">480 × 832（Wan2.2 默认）</option>
           <option value="720x1280">720 × 1280（竖版）</option>
           <option value="1280x720">1280 × 720（横版）</option>
           <option value="1024x1024">1024 × 1024（方形）</option>
@@ -431,10 +435,9 @@ input[type=range]:active::-webkit-slider-thumb{transform:scale(1.15)}
 
   </div><!-- /panels -->
 
-  <!-- 底部常驻资源条 -->
+  <!-- 任务队列条 -->
   <div id="strip">
-    <div class="strip-new" onclick="switchTab('create')" title="新建生成">＋</div>
-    <div class="strip-empty" id="strip-empty">暂无生成记录</div>
+    <div class="strip-empty" id="strip-empty">暂无任务</div>
   </div>
 
   <!-- Tab Bar -->
@@ -487,6 +490,9 @@ let workflows = {};
 let allFiles = []; 
 let galleryFilter = 'all';
 let uploadedImage = null;
+let sessionFiles = []; // 本次 session 生成的内容
+let tasks = [];       // 任务队列 [{id, prompt, wf, status, elapsed, url, type}]
+let taskIdCounter = 0;
 
 // ══════════════════════════════════════════════════════════════════
 // Init
@@ -511,14 +517,36 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (durEl) sl(durEl, 'dur-v', 1);
   if (fpsEl) sl(fpsEl, 'fps-v', 1);
 
-  if (savedApi) await init();
+  // 恢复本地工作流缓存（无网络请求）
+  const cached = localStorage.getItem('cached_workflows');
+  if (cached) {
+    try { workflows = JSON.parse(cached); renderWfBar(workflows); } catch {}
+  } else {
+    renderWfBar({ txt2img: { name:'Z-image 质感', icon:'✦', output_type:'image', requires_image:false },
+                  txt2vid: { name:'LTX 视频', icon:'🎬', output_type:'video', requires_image:false },
+                  wan2vid: { name:'Wan2 图生视频', icon:'🎥', output_type:'video', requires_image:true } });
+  }
+  loadStrip();
 });
 
 async function init() {
-  await fetchWorkflows();
-  checkConn();
+  // 优先从本地缓存恢复工作流（不唤醒 Modal）
+  const cached = localStorage.getItem('cached_workflows');
+  if (cached) {
+    try {
+      workflows = JSON.parse(cached);
+      renderWfBar(workflows);
+    } catch {}
+  } else {
+    // 首次使用才拉取
+    await fetchWorkflows();
+  }
+  // 后台静默刷新工作流（不阻塞页面）
+  fetchWorkflows().then(() => {
+    localStorage.setItem('cached_workflows', JSON.stringify(workflows));
+  }).catch(() => {});
+  // 不在启动时 checkConn，避免唤醒容器
   loadStrip();
-  if(document.getElementById('panel-gallery').classList.contains('active')) loadGallery();
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -530,17 +558,20 @@ function getHistory() {
 }
 
 function addToHistory(url, type) {
-  const history = getHistory();
-  history.unshift({
+  const item = {
     filename: url.split('/').pop(),
     url: url,
     type: type,
     workflow: currentWf,
     workflow_name: workflows[currentWf]?.name || currentWf,
     last_modified: new Date().toISOString()
-  });
-  localStorage.setItem('ai_gallery', JSON.stringify(history));
-  loadStrip();
+  };
+  // 加入本地历史（跨 session 持久化）
+  const history = getHistory();
+  history.unshift(item);
+  localStorage.setItem('ai_gallery', JSON.stringify(history.slice(0, 200)));
+  // 加入本次 session（只在底部资源条显示）
+  sessionFiles.unshift(item);
   if(document.getElementById('panel-gallery').classList.contains('active')) loadGallery();
 }
 
@@ -553,9 +584,14 @@ async function fetchWorkflows() {
   try {
     const data = await fetch(api + '/api/workflows', { signal: AbortSignal.timeout(5000) }).then(r => r.json());
     workflows = data.workflows || {};
+    localStorage.setItem('cached_workflows', JSON.stringify(workflows));
     renderWfBar(workflows);
   } catch {
-    renderWfBar({ txt2img: { name:'文生图', icon:'✦', requires_image:false } });
+    // 网络失败时用缓存，实在没有才用默认
+    const cached = localStorage.getItem('cached_workflows');
+    if (cached) { try { workflows = JSON.parse(cached); } catch {} }
+    if (!Object.keys(workflows).length) workflows = { txt2img: { name:'文生图', icon:'✦', output_type:'image', requires_image:false } };
+    renderWfBar(workflows);
   }
 }
 
@@ -601,32 +637,50 @@ function onImageSelect(input) {
 // Generate
 // ══════════════════════════════════════════════════════════════════
 async function generate() {
-  if (busy) return;
   const api = getApi();
   if (!api) { toast('请先在「参数」填写 API 地址'); switchTab('settings'); return; }
   const prompt = document.getElementById('prompt').value.trim();
   if (!prompt) { toast('请输入描述内容'); return; }
-
   const meta = workflows[currentWf] || {};
   if (meta.requires_image && !uploadedImage) { toast('请先上传参考图'); return; }
 
+  // 创建任务
+  const taskId = ++taskIdCounter;
+  const task = {
+    id: taskId,
+    prompt: prompt,
+    wf: currentWf,
+    wfName: workflows[currentWf]?.name || currentWf,
+    status: 'running', // running | done | error
+    elapsed: 0,
+    url: null,
+    type: null,
+    imageFile: meta.requires_image ? uploadedImage : null,
+  };
+  tasks.unshift(task);
+  renderStrip();
+
+  // 显示进度（当前任务）
   busy = true;
   setStatus('busy', '生成中');
-  const btn = document.getElementById('gen-btn');
-  btn.disabled = true; btn.textContent = '生成中…';
   document.getElementById('result-actions').style.display = 'none';
   document.getElementById('result-ph').style.display = 'flex';
   document.getElementById('prog').classList.add('show');
-
   elapsed = 0;
   document.getElementById('prog-time').textContent = '0s';
   document.getElementById('prog-label').textContent = '启动引擎中，首次约 30s…';
+  const btn = document.getElementById('gen-btn');
+  btn.disabled = true; btn.textContent = '生成中…';
+
+  // 计时（同步更新任务卡片）
   timer = setInterval(() => {
     elapsed++;
+    task.elapsed = elapsed;
     document.getElementById('prog-time').textContent = elapsed + 's';
     if (elapsed === 20) document.getElementById('prog-label').textContent = '加载模型中…';
     if (elapsed === 50) document.getElementById('prog-label').textContent = '正在生成…';
     if (elapsed === 90) document.getElementById('prog-label').textContent = '正在放大或合成中…';
+    renderStrip(); // 实时更新秒数
   }, 1000);
 
   try {
@@ -640,11 +694,10 @@ async function generate() {
       duration: parseInt(document.getElementById('duration')?.value || 10),
       fps: parseInt(document.getElementById('fps')?.value || 24),
     };
-
     const fd = new FormData();
     fd.append('workflow_id', currentWf);
     fd.append('params', JSON.stringify(params));
-    if (meta.requires_image && uploadedImage) fd.append('image', uploadedImage);
+    if (meta.requires_image && task.imageFile) fd.append('image', task.imageFile);
 
     const resp = await fetch(api + '/api/generate', { method: 'POST', body: fd });
     if (!resp.ok) throw new Error('HTTP ' + resp.status);
@@ -652,24 +705,28 @@ async function generate() {
     if (data.status !== 'ok' || !data.results?.length) throw new Error('未返回结果');
 
     const first = data.results[0];
+    task.status = 'done';
+    task.url = first.url;
+    task.type = first.type;
+
     const isVid = first.type === 'video';
     showResult(first.url, isVid);
     lastSrc = first.url; lastIsVid = isVid;
     document.getElementById('result-actions').style.display = 'flex';
     setStatus('ready', '就绪');
     toast('完成，用时 ' + elapsed + 's ✓');
-
-    // 存入本地缓存！
     addToHistory(first.url, first.type);
 
   } catch(err) {
+    task.status = 'error';
     setStatus('error', '失败');
     toast('失败：' + err.message);
   } finally {
     busy = false;
     clearInterval(timer);
     document.getElementById('prog').classList.remove('show');
-    btn.disabled = false; btn.textContent = '再次生成';
+    btn.disabled = false; btn.textContent = '生成';
+    renderStrip();
   }
 }
 
@@ -682,36 +739,62 @@ function showResult(src, isVid) {
 }
 
 // ══════════════════════════════════════════════════════════════════
-// Bottom Strip（常驻资源条，全本地读取）
+// 任务队列条
 // ══════════════════════════════════════════════════════════════════
-function loadStrip() {
-  renderStrip(getHistory());
-}
+function loadStrip() { renderStrip(); }
 
-function renderStrip(files) {
+function renderStrip() {
   const strip = document.getElementById('strip');
   const empty = document.getElementById('strip-empty');
-  strip.innerHTML = '';
-  const newBtn = document.createElement('div');
-  newBtn.className = 'strip-new'; newBtn.title = '新建生成'; newBtn.textContent = '＋';
-  newBtn.onclick = () => switchTab('create');
-  strip.appendChild(newBtn);
+  // 清空但保留 empty 节点
+  Array.from(strip.children).forEach(el => { if (el !== empty) el.remove(); });
 
-  if (!files.length) {
+  if (!tasks.length) {
     empty.style.display = 'block';
-    strip.appendChild(empty);
     return;
   }
   empty.style.display = 'none';
 
-  files.slice(0, 20).forEach(f => {
-    const isVid = f.type === 'video';
-    const div = document.createElement('div');
-    div.className = 'strip-item';
-    if (isVid) div.innerHTML = `<video src="${f.url}" loop autoplay muted playsinline></video><div class="strip-vid-icon">▶</div>`;
-    else div.innerHTML = `<img src="${f.url}" loading="lazy" alt="">`;
-    div.onclick = () => openLb(f.url, isVid ? 'vid' : 'img');
-    strip.appendChild(div);
+  tasks.forEach(task => {
+    const card = document.createElement('div');
+    card.className = 'task-card';
+    card.dataset.taskId = task.id;
+
+    // 缩略图区域
+    let thumbHtml = '';
+    if (task.status === 'running') {
+      thumbHtml = '<div class="t-spin"></div>';
+    } else if (task.status === 'error') {
+      thumbHtml = '<div class="t-err">✕</div>';
+    } else if (task.url) {
+      const isVid = task.type === 'video';
+      thumbHtml = isVid
+        ? `<video src="${task.url}" muted autoplay loop playsinline style="width:100%;height:100%;object-fit:cover"></video>`
+        : `<img src="${task.url}" style="width:100%;height:100%;object-fit:cover" loading="lazy">`;
+    }
+
+    // 状态文字
+    const statusMap = { running: '生成中', done: '完成', error: '失败' };
+    const dotClass = task.status;
+    const metaText = task.status === 'running'
+      ? `${task.elapsed}s…`
+      : task.status === 'done' ? `${task.elapsed}s · ${task.wfName}` : '生成失败';
+
+    card.innerHTML = `
+      <div class="task-thumb">${thumbHtml}</div>
+      <div class="task-info">
+        <div class="task-prompt">${task.prompt}</div>
+        <div class="task-meta">
+          <div class="task-status-dot ${dotClass}"></div>
+          <span>${metaText}</span>
+        </div>
+      </div>`;
+
+    // 点击完成的任务直接预览
+    if (task.status === 'done' && task.url) {
+      card.onclick = () => openLb(task.url, task.type === 'video' ? 'vid' : 'img');
+    }
+    strip.appendChild(card);
   });
 }
 
@@ -719,9 +802,19 @@ function renderStrip(files) {
 // Gallery（本地秒开版资源库）
 // ══════════════════════════════════════════════════════════════════
 function loadGallery() {
-  allFiles = getHistory();
-  renderGalleryFilters();
-  filterGallery();
+  // 显示加载动画
+  const grid = document.getElementById('g-grid');
+  const count = document.getElementById('g-count');
+  const empty = document.getElementById('g-empty');
+  grid.innerHTML = '<div style="grid-column:1/-1;display:flex;justify-content:center;padding:40px 0"><div class="gallery-spinner"></div></div>';
+  count.textContent = '加载中…';
+  empty.style.display = 'none';
+  // 用 setTimeout 让动画先渲染出来再同步读取
+  setTimeout(() => {
+    allFiles = getHistory();
+    renderGalleryFilters();
+    filterGallery();
+  }, 60);
 }
 
 function renderGalleryFilters() {
@@ -812,10 +905,32 @@ async function shareResult() {
 }
 
 function openLb(src, type) {
+  if (type === 'vid') {
+    // 视频优先尝试原生全屏
+    const vid = document.createElement('video');
+    vid.src = src; vid.controls = true; vid.autoplay = true; vid.playsInline = true;
+    vid.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;background:#000;z-index:9999;object-fit:contain';
+    document.body.appendChild(vid);
+    vid.play().catch(()=>{});
+    // iOS Safari
+    if (vid.webkitEnterFullscreen) {
+      vid.addEventListener('loadedmetadata', () => vid.webkitEnterFullscreen(), {once:true});
+    } else if (vid.requestFullscreen) {
+      vid.requestFullscreen().catch(()=>{});
+    }
+    // 退出全屏时移除节点
+    const cleanup = () => { vid.pause(); vid.remove(); };
+    vid.addEventListener('webkitendfullscreen', cleanup, {once:true});
+    document.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement) cleanup(); }, {once:true});
+    // 点击非全屏时也能关闭
+    vid.addEventListener('click', cleanup);
+    return;
+  }
+  // 图片用 Lightbox
   const img = document.getElementById('lb-img');
-  const vid = document.getElementById('lb-vid');
-  if (type === 'vid') { img.style.display='none'; vid.src=src; vid.style.display='block'; }
-  else { vid.style.display='none'; vid.src=''; img.src=src; img.style.display='block'; }
+  const vid2 = document.getElementById('lb-vid');
+  vid2.style.display='none'; vid2.src='';
+  img.src=src; img.style.display='block';
   document.getElementById('lb').classList.add('show');
 }
 function closeLb() { document.getElementById('lb').classList.remove('show'); document.getElementById('lb-vid').src=''; }
