@@ -403,7 +403,16 @@ input[type=range]:active::-webkit-slider-thumb{transform:scale(1.15)}
             <input type="range" id="fps" min="12" max="30" value="16" oninput="sl(this,'fps-v',1)">
           </div>
         </div>
-        <div class="info-row" style="padding-top:0;border-bottom:none">
+        
+        <div id="upscale-row" class="info-row" style="padding-bottom:0;border-bottom:none;margin-top:14px;display:none">
+          <span class="info-label">🚀 极限画质 (2x 超清重绘)</span>
+          <span class="info-val">
+            <input type="checkbox" id="upscale" checked style="width:16px;height:16px;accent-color:var(--ac);vertical-align:middle">
+          </span>
+        </div>
+        <div id="upscale-hint" style="font-size:12px;color:var(--text3);margin-top:4px;display:none">开启后将逐帧放大画面，生成耗时会小幅增加</div>
+
+        <div class="info-row" style="padding-top:0;border-bottom:none;margin-top:14px">
           <span class="info-label">推理步数</span>
           <span class="info-val" id="steps-v">10</span>
         </div>
@@ -437,7 +446,6 @@ input[type=range]:active::-webkit-slider-thumb{transform:scale(1.15)}
       <div class="g-grid" id="g-grid"></div>
       <div class="g-empty" id="g-empty">
         <div style="font-size:36px;margin-bottom:12px">🎨</div>
-        <div style="font-size:32px;margin-bottom:8px">🎨</div>
         还没有生成记录<br>
         <span style="font-size:12px;color:var(--text3)">生成完成后自动保存到此处</span>
       </div>
@@ -659,6 +667,10 @@ function renderWfBar(wfs) {
 }
 
 function selectWf(id) {
+  const upscaleRow = document.getElementById('upscale-row');
+  const upscaleHint = document.getElementById('upscale-hint');
+  if (upscaleRow) upscaleRow.style.display = (id === 'wan2vid') ? 'flex' : 'none';
+  if (upscaleHint) upscaleHint.style.display = (id === 'wan2vid') ? 'block' : 'none';
   currentWf = id;
   document.querySelectorAll('.wf-pill').forEach(p => p.classList.remove('active'));
   const el = document.getElementById('wf-' + id);
@@ -682,7 +694,7 @@ function onImageSelect(input) {
 }
 
 // ══════════════════════════════════════════════════════════════════
-// Generate (主动唤醒)
+// Generate
 // ══════════════════════════════════════════════════════════════════
 async function generate() {
   const api = getApi();
@@ -723,22 +735,23 @@ async function generate() {
     task.elapsed = elapsed;
     document.getElementById('prog-time').textContent = elapsed + 's';
     if (elapsed === 20) document.getElementById('prog-label').textContent = '加载模型中…';
-    if (elapsed === 50) document.getElementById('prog-label').textContent = '正在生成…';
-    if (elapsed === 90) document.getElementById('prog-label').textContent = '正在放大或合成中…';
+    if (elapsed === 50) document.getElementById('prog-label').textContent = '正在生成视频帧…';
+    if (elapsed === 120) document.getElementById('prog-label').textContent = '正在逐帧放大或配音中…';
     renderStrip(); 
   }, 1000);
 
   try {
     const [w, h] = document.getElementById('size').value.split('x').map(Number);
+    // ✅ 新增传入 upscale 参数
     const params = {
       prompt,
       negative: document.getElementById('negative').value.trim(),
       steps: parseInt(document.getElementById('steps').value),
       cfg: parseFloat((document.getElementById('cfg').value * 0.1).toFixed(1)),
       width: w, height: h,
-      // ✅ 确保前端传给后端的是正确的默认安全数值
       duration: parseInt(document.getElementById('duration')?.value || 5),
       fps: parseInt(document.getElementById('fps')?.value || 16),
+      upscale: document.getElementById('upscale')?.checked || false,
     };
     const fd = new FormData();
     fd.append('workflow_id', currentWf);
