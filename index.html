@@ -373,7 +373,7 @@ input[type=range]:active::-webkit-slider-thumb{transform:scale(1.15)}
         <input type="text" id="r2-worker-url" placeholder="https://your-worker.workers.dev" autocorrect="off" autocapitalize="none" spellcheck="false">
         <div style="font-size:12px;color:var(--text3);margin-top:6px;line-height:1.6">
           部署 Cloudflare Worker 后填入地址<br>
-          资源库同步将直接连接 R2，不唤醒 Modal
+          资源库同步/删除直接连接 R2，完全不唤醒 Modal
         </div>
       </div>
 
@@ -426,7 +426,7 @@ input[type=range]:active::-webkit-slider-thumb{transform:scale(1.15)}
         <div class="card-title">关于</div>
         <div class="info-row" style="padding-top:0"><span class="info-label">模型</span><span class="info-val">Z-image-ZiT v7</span></div>
         <div class="info-row"><span class="info-label">放大</span><span class="info-val">4x-UltraSharp × 2</span></div>
-        <div class="info-row"><span class="info-label">存储</span><span class="info-val">R2直链 (本地极速缓存)</span></div>
+        <div class="info-row"><span class="info-label">存储</span><span class="info-val">Cloudflare R2 直连</span></div>
       </div>
     </div>
 
@@ -596,52 +596,43 @@ function addToHistory(url, type) {
 }
 
 function getR2Worker() { return (localStorage.getItem('r2_worker_url') || '').replace(/\/$/, ''); }
+// R2 公开基础 URL（用于拼接文件直链）
+const R2_PUB = 'https://pub-4791c033573040dbb9f282c459ed2270.r2.dev';
 
-// 手动同步：优先直连 R2 Worker，无 Worker 则走 Modal
+// 所有 R2 操作统一走 Worker，不经过 Modal
+async function r2List() {
+  const w = getR2Worker();
+  if (!w) throw new Error('请先在「参数」配置 R2 Worker 地址');
+  const data = await fetch(`${w}/list?pub=${encodeURIComponent(R2_PUB)}`).then(r => r.json());
+  return (data.files || []).map(f => ({
+    filename: f.key,
+    url: f.url || `${R2_PUB}/${f.key}`,
+    type: /\.(mp4|webm)$/i.test(f.key) ? 'video' : 'image',
+    workflow: f.key.split('/')[0] || 'unknown',
+    workflow_name: '',
+    last_modified: f.uploaded || new Date().toISOString(),
+  }));
+}
+
+async function r2Delete(key) {
+  const w = getR2Worker();
+  if (!w) throw new Error('请先配置 R2 Worker 地址');
+  const resp = await fetch(`${w}/delete?key=${encodeURIComponent(key)}`, { method: 'DELETE' });
+  if (!resp.ok) throw new Error('删除失败 ' + resp.status);
+}
+
 async function refreshGallery() {
+  const w = getR2Worker();
+  if (!w) { toast('请先在「参数」配置 R2 Worker 地址'); switchTab('settings'); return; }
   const btn = document.getElementById('gallery-refresh-btn');
   if (btn) { btn.textContent = '同步中…'; btn.disabled = true; }
-  document.getElementById('g-count').textContent = '同步中…';
-
-  const r2Worker = getR2Worker();
-  const modalApi = getApi();
-
-  if (!r2Worker && !modalApi) {
-    toast('请先在「参数」填写 API 地址或 R2 Worker 地址');
-    if (btn) { btn.textContent = '同步 R2'; btn.disabled = false; }
-    allFiles = getGalleryCache(); renderGalleryFilters(); filterGallery();
-    return;
-  }
-
+  document.getElementById('g-count').textContent = '从 R2 读取…';
   try {
-    let files = [];
-    if (r2Worker) {
-      // 直连 R2 Worker（不唤醒 Modal）
-      const data = await fetch(r2Worker + '/list').then(r => r.json());
-      files = (data.files || []).map(f => ({
-        filename: f.key,
-        url: f.url,
-        type: /\.(mp4|webm)$/i.test(f.key) ? 'video' : 'image',
-        workflow: f.key.split('/')[0] || 'unknown',
-        workflow_name: '',
-        last_modified: f.uploaded || new Date().toISOString(),
-      }));
-      toast('R2 直连同步完成 · ' + files.length + ' 个文件 ✓');
-    } else {
-      // Fallback：经 Modal 获取（会唤醒容器）
-      toast('未配置 R2 Worker，通过 Modal 同步…');
-      const data = await fetch(modalApi + '/api/files?limit=500').then(r => r.json());
-      files = (data.files || []).map(f => ({
-        filename: f.filename, url: f.url, type: f.type,
-        workflow: f.workflow || 'unknown',
-        workflow_name: f.workflow_name || '',
-        last_modified: f.last_modified || new Date().toISOString(),
-      }));
-      toast('已同步 ' + files.length + ' 个文件 ✓');
-    }
+    const files = await r2List();
     setGalleryCache(files);
     allFiles = files;
     renderGalleryFilters(); filterGallery();
+    toast('同步完成 · ' + files.length + ' 个文件 ✓');
   } catch(e) {
     toast('同步失败：' + e.message);
     allFiles = getGalleryCache();
@@ -930,15 +921,14 @@ function renderGallery(files) {
 async function delFile(filename, e) {
   e.stopPropagation();
   if (!confirm('删除此文件？将同时从 R2 删除。')) return;
-  // 立即从本地缓存移除
+  // 立即从本地缓存移除（秒响应）
   const cache = getGalleryCache().filter(f => f.filename !== filename);
   setGalleryCache(cache);
   allFiles = cache;
   toast('已删除');
   renderGalleryFilters(); filterGallery();
-  // 后台异步从 R2 删除
-  const api = getApi();
-  if (api) fetch(api + '/api/files/' + encodeURIComponent(filename), { method: 'DELETE' }).catch(() => {});
+  // 直接从 R2 删除（不经过 Modal）
+  r2Delete(filename).catch(err => toast('R2 删除失败：' + err.message));
 }
 
 // ══════════════════════════════════════════════════════════════════
