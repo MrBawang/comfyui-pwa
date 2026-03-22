@@ -490,8 +490,8 @@ let workflows = {};
 let allFiles = []; 
 let galleryFilter = 'all';
 let uploadedImage = null;
-let sessionFiles = []; // 本次 session 生成的内容
-let tasks = [];       // 任务队列 [{id, prompt, wf, status, elapsed, url, type}]
+let sessionFiles = []; 
+let tasks = [];       
 let taskIdCounter = 0;
 
 // ══════════════════════════════════════════════════════════════════
@@ -500,12 +500,12 @@ let taskIdCounter = 0;
 document.addEventListener('DOMContentLoaded', async () => {
   const savedApi = localStorage.getItem('api_url');
   if (savedApi) document.getElementById('api-url').value = savedApi;
+  
+  // ✅ 修改1：离开输入框仅保存至本地，彻底断开与 Modal 的静默连接
   document.getElementById('api-url').addEventListener('blur', e => {
     localStorage.setItem('api_url', e.target.value.trim());
-    init();
   });
 
-  // R2 Worker 地址：读取并保存
   const savedR2 = localStorage.getItem('r2_worker_url');
   if (savedR2) {
     const el = document.getElementById('r2-worker-url');
@@ -531,7 +531,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 async function init() {
-  // 优先从本地缓存恢复工作流（不唤醒 Modal）
+  // ✅ 修改2：启动网页时，完全依赖本地缓存。如果没有缓存，则提供一份安全的离线后备名单。
+  // 绝对不会在后台主动唤醒 Modal 去拉取列表！
   const cached = localStorage.getItem('cached_workflows');
   if (cached) {
     try {
@@ -539,32 +540,30 @@ async function init() {
       renderWfBar(workflows);
     } catch {}
   } else {
-    // 首次使用才拉取
-    await fetchWorkflows();
+    workflows = {
+      txt2img: { name:'Z-image 质感', icon:'✦', output_type:'image', requires_image:false },
+      txt2vid: { name:'LTX 视频', icon:'🎬', output_type:'video', requires_image:false },
+      wan2vid: { name:'Wan2 图生视频', icon:'🎥', output_type:'video', requires_image:true }
+    };
+    renderWfBar(workflows);
   }
   
-  // 后台静默刷新工作流
-  fetchWorkflows().then(() => {
-    localStorage.setItem('cached_workflows', JSON.stringify(workflows));
-  }).catch(() => {});
-  
-  // 1. 先秒速加载本地历史记录
+  // 初始化纯本地和 Cloudflare 直连资源
   loadStrip();
   if(document.getElementById('panel-gallery').classList.contains('active')) {
     loadGallery();
   }
 
-  // 2. 后台静默同步 R2 最新资源
+  // 纯静态访问 Cloudflare，完全绕过 Modal
   if (getR2Worker()) {
     r2List().then(files => {
-      setGalleryCache(files); // 更新本地缓存
+      setGalleryCache(files); 
       allFiles = files;
-      // 如果当前正好停留在资源库页面，无缝刷新画面
       if(document.getElementById('panel-gallery').classList.contains('active')) {
         renderGalleryFilters(); 
         filterGallery();
       }
-      loadStrip(); // 刷新底部的最近任务条
+      loadStrip(); 
     }).catch(() => {}); 
   }
 }
@@ -572,7 +571,6 @@ async function init() {
 // ══════════════════════════════════════════════════════════════════
 // Local Storage History Helper (彻底脱离 API)
 // ══════════════════════════════════════════════════════════════════
-// 本地缓存（R2 文件列表的镜像，供离线/快速读取）
 function getGalleryCache() {
   try { return JSON.parse(localStorage.getItem('r2_gallery_cache') || '[]'); }
   catch { return []; }
@@ -581,7 +579,6 @@ function setGalleryCache(files) {
   localStorage.setItem('r2_gallery_cache', JSON.stringify(files));
 }
 
-// 生成完成后把新结果插入缓存顶部
 function addToHistory(url, type) {
   const item = {
     filename: url.split('/').pop(),
@@ -591,11 +588,9 @@ function addToHistory(url, type) {
     workflow_name: workflows[currentWf]?.name || currentWf,
     last_modified: new Date().toISOString()
   };
-  // 插入本地缓存顶部
   const cache = getGalleryCache();
   cache.unshift(item);
   setGalleryCache(cache.slice(0, 500));
-  // 同步更新资源库面板
   allFiles = getGalleryCache();
   const galleryPanel = document.getElementById('panel-gallery');
   if (galleryPanel && galleryPanel.classList.contains('active')) {
@@ -604,10 +599,8 @@ function addToHistory(url, type) {
 }
 
 function getR2Worker() { return (localStorage.getItem('r2_worker_url') || '').replace(/\/$/, ''); }
-// R2 公开基础 URL（用于拼接文件直链）
 const R2_PUB = 'https://pub-4791c033573040dbb9f282c459ed2270.r2.dev';
 
-// 所有 R2 操作统一走 Worker，不经过 Modal
 async function r2List() {
   const w = getR2Worker();
   if (!w) throw new Error('请先在「参数」配置 R2 Worker 地址');
@@ -651,25 +644,8 @@ async function refreshGallery() {
 }
 
 // ══════════════════════════════════════════════════════════════════
-// Workflow
+// Workflow 渲染
 // ══════════════════════════════════════════════════════════════════
-async function fetchWorkflows() {
-  const api = getApi();
-  if (!api) { renderWfBar({ txt2img: { name:'文生图', icon:'✦', requires_image:false } }); return; }
-  try {
-    const data = await fetch(api + '/api/workflows', { signal: AbortSignal.timeout(5000) }).then(r => r.json());
-    workflows = data.workflows || {};
-    localStorage.setItem('cached_workflows', JSON.stringify(workflows));
-    renderWfBar(workflows);
-  } catch {
-    // 网络失败时用缓存，实在没有才用默认
-    const cached = localStorage.getItem('cached_workflows');
-    if (cached) { try { workflows = JSON.parse(cached); } catch {} }
-    if (!Object.keys(workflows).length) workflows = { txt2img: { name:'文生图', icon:'✦', output_type:'image', requires_image:false } };
-    renderWfBar(workflows);
-  }
-}
-
 function renderWfBar(wfs) {
   const bar = document.getElementById('wf-bar');
   bar.innerHTML = '';
@@ -710,7 +686,7 @@ function onImageSelect(input) {
 }
 
 // ══════════════════════════════════════════════════════════════════
-// Generate
+// Generate (主动唤醒)
 // ══════════════════════════════════════════════════════════════════
 async function generate() {
   const api = getApi();
@@ -720,14 +696,13 @@ async function generate() {
   const meta = workflows[currentWf] || {};
   if (meta.requires_image && !uploadedImage) { toast('请先上传参考图'); return; }
 
-  // 创建任务
   const taskId = ++taskIdCounter;
   const task = {
     id: taskId,
     prompt: prompt,
     wf: currentWf,
     wfName: workflows[currentWf]?.name || currentWf,
-    status: 'running', // running | done | error
+    status: 'running', 
     elapsed: 0,
     url: null,
     type: null,
@@ -736,7 +711,6 @@ async function generate() {
   tasks.unshift(task);
   renderStrip();
 
-  // 显示进度（当前任务）
   busy = true;
   setStatus('busy', '生成中');
   document.getElementById('result-actions').style.display = 'none';
@@ -748,7 +722,6 @@ async function generate() {
   const btn = document.getElementById('gen-btn');
   btn.disabled = true; btn.textContent = '生成中…';
 
-  // 计时（同步更新任务卡片）
   timer = setInterval(() => {
     elapsed++;
     task.elapsed = elapsed;
@@ -756,7 +729,7 @@ async function generate() {
     if (elapsed === 20) document.getElementById('prog-label').textContent = '加载模型中…';
     if (elapsed === 50) document.getElementById('prog-label').textContent = '正在生成…';
     if (elapsed === 90) document.getElementById('prog-label').textContent = '正在放大或合成中…';
-    renderStrip(); // 实时更新秒数
+    renderStrip(); 
   }, 1000);
 
   try {
@@ -822,7 +795,6 @@ function loadStrip() { renderStrip(); }
 function renderStrip() {
   const strip = document.getElementById('strip');
   const empty = document.getElementById('strip-empty');
-  // 清空但保留 empty 节点
   Array.from(strip.children).forEach(el => { if (el !== empty) el.remove(); });
 
   if (!tasks.length) {
@@ -836,7 +808,6 @@ function renderStrip() {
     card.className = 'task-card';
     card.dataset.taskId = task.id;
 
-    // 缩略图区域
     let thumbHtml = '';
     if (task.status === 'running') {
       thumbHtml = '<div class="t-spin"></div>';
@@ -849,8 +820,6 @@ function renderStrip() {
         : `<img src="${task.url}" style="width:100%;height:100%;object-fit:cover" loading="lazy">`;
     }
 
-    // 状态文字
-    const statusMap = { running: '生成中', done: '完成', error: '失败' };
     const dotClass = task.status;
     const metaText = task.status === 'running'
       ? `${task.elapsed}s…`
@@ -866,7 +835,6 @@ function renderStrip() {
         </div>
       </div>`;
 
-    // 点击完成的任务直接预览
     if (task.status === 'done' && task.url) {
       card.onclick = () => openLb(task.url, task.type === 'video' ? 'vid' : 'img');
     }
@@ -878,7 +846,6 @@ function renderStrip() {
 // Gallery（本地秒开版资源库）
 // ══════════════════════════════════════════════════════════════════
 function loadGallery() {
-  // 从本地缓存秒开，点「同步 R2」才联网
   allFiles = getGalleryCache();
   renderGalleryFilters();
   filterGallery();
@@ -898,7 +865,6 @@ function renderGalleryFilters() {
     c.type = 'button';
     c.onclick = () => { 
       galleryFilter = id; 
-      // 修复苹果端 Tag 切换失效问题：不销毁重建 DOM，直接修改样式
       Array.from(row.children).forEach(btn => btn.classList.remove('active'));
       c.classList.add('active');
       filterGallery(); 
@@ -923,7 +889,6 @@ function renderGallery(files) {
   files.forEach(f => {
     const isVid = f.type === 'video';
     const div = document.createElement('div'); div.className = 'g-item';
-    // 缩略图一律静音播放以符合浏览器安全策略
     if (isVid) div.innerHTML = `<video src="${f.url}" loop autoplay muted playsinline></video><div class="g-badge">VIDEO</div>`;
     else if (f.type === 'gif') div.innerHTML = `<img src="${f.url}" loading="lazy" alt=""><div class="g-badge">GIF</div>`;
     else div.innerHTML = `<img src="${f.url}" loading="lazy" alt="">`;
@@ -938,13 +903,11 @@ function renderGallery(files) {
 async function delFile(filename, e) {
   e.stopPropagation();
   if (!confirm('删除此文件？将同时从 R2 删除。')) return;
-  // 立即从本地缓存移除（秒响应）
   const cache = getGalleryCache().filter(f => f.filename !== filename);
   setGalleryCache(cache);
   allFiles = cache;
   toast('已删除');
   renderGalleryFilters(); filterGallery();
-  // 直接从 R2 删除（不经过 Modal）
   r2Delete(filename).catch(err => toast('R2 删除失败：' + err.message));
 }
 
@@ -977,27 +940,22 @@ async function shareResult() {
 
 function openLb(src, type) {
   if (type === 'vid') {
-    // 视频优先尝试原生全屏
     const vid = document.createElement('video');
     vid.src = src; vid.controls = true; vid.autoplay = true; vid.playsInline = true;
     vid.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;background:#000;z-index:9999;object-fit:contain';
     document.body.appendChild(vid);
     vid.play().catch(()=>{});
-    // iOS Safari
     if (vid.webkitEnterFullscreen) {
       vid.addEventListener('loadedmetadata', () => vid.webkitEnterFullscreen(), {once:true});
     } else if (vid.requestFullscreen) {
       vid.requestFullscreen().catch(()=>{});
     }
-    // 退出全屏时移除节点
     const cleanup = () => { vid.pause(); vid.remove(); };
     vid.addEventListener('webkitendfullscreen', cleanup, {once:true});
     document.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement) cleanup(); }, {once:true});
-    // 点击非全屏时也能关闭
     vid.addEventListener('click', cleanup);
     return;
   }
-  // 图片用 Lightbox
   const img = document.getElementById('lb-img');
   const vid2 = document.getElementById('lb-vid');
   vid2.style.display='none'; vid2.src='';
@@ -1013,7 +971,7 @@ function lbSave() {
 }
 
 // ══════════════════════════════════════════════════════════════════
-// Utils
+// Utils (包含主动连接 Modal)
 // ══════════════════════════════════════════════════════════════════
 function getApi() { return (localStorage.getItem('api_url')||'').replace(/\/$/,''); }
 function switchTab(name) {
@@ -1037,15 +995,13 @@ function toast(msg) {
   el.textContent = msg; el.classList.add('show');
   clearTimeout(toastT); toastT = setTimeout(()=>el.classList.remove('show'), 2800);
 }
-async function checkConn() {
-  const api = getApi(); if (!api) return;
-  try {
-    const r = await fetch(api + '/api/workflows', { signal: AbortSignal.timeout(8000) });
-    setStatus(r.ok ? 'ready' : 'error', r.ok ? '已连接' : '连接失败');
-  } catch { setStatus('error', '连接失败'); }
+
+// ✅ 修改3：单独封装给“刷新工作流”按钮，强行唤醒并同步
+async function refreshWorkflows() {
+  await manualConnect();
 }
 
-// 手动点击触发连接（有动画）
+// 手动点击小圆点或刷新工作流触发连接（主动唤醒）
 async function manualConnect() {
   if (busy) return;
   const api = getApi();
@@ -1062,7 +1018,7 @@ async function manualConnect() {
       localStorage.setItem('cached_workflows', JSON.stringify(workflows));
       renderWfBar(workflows);
       setStatus('ready', '已连接');
-      toast('连接成功，工作流已更新 ✓');
+      toast('连接成功，工作流已同步 ✓');
     } else {
       setStatus('error', '连接失败');
       toast('服务器返回错误 ' + resp.status);
