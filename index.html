@@ -27,10 +27,12 @@
   --sh2:0 4px 20px rgba(0,0,0,.08),0 2px 6px rgba(0,0,0,.04);
   --r:18px;--rsm:12px;--rxs:8px;
   --sat:env(safe-area-inset-top);
-  --sat:env(safe-area-inset-bottom);
+  --sab:env(safe-area-inset-bottom);
   --font:-apple-system,'Helvetica Neue',sans-serif;
   --tab-h:83px;
   --strip-h:96px; 
+  /* ✅ 统一计算底部安全区 + UI条的高度，用于完美悬浮 */
+  --bottom-ui-h: calc(var(--sab) + var(--tab-h) + var(--strip-h) + 16px);
 }
 @media(prefers-color-scheme:dark){:root{
   --bg:#000;--bg2:#1c1c1e;--bg3:rgba(255,255,255,.07);--bg4:rgba(255,255,255,.10);
@@ -83,7 +85,8 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
   overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;
   opacity:0;pointer-events:none;transform:translateY(6px);
   transition:opacity .18s ease,transform .18s ease;
-  padding:0 16px calc(var(--sab) + var(--tab-h) + var(--strip-h) + 16px);
+  /* ✅ 统一底部留白距离 */
+  padding:0 16px var(--bottom-ui-h);
 }
 .panel.active{opacity:1;pointer-events:auto;transform:translateY(0)}
 .panel::-webkit-scrollbar{display:none}
@@ -261,14 +264,26 @@ input[type=range]:active::-webkit-slider-thumb{transform:scale(1.15)}
 .tab-label{font-size:10px;font-weight:500;color:var(--text3);transition:color .15s}
 .tab-item.active .tab-label{color:var(--ac)}
 
-/* ── Gen Button ── */
+/* ── Gen Button (✅ 升级为智能悬浮锁底模式) ── */
 #gen-btn{
-  width:100%;padding:15px;border:none;border-radius:var(--r);
-  background:var(--ac);color:#fff;font-family:var(--font);
-  font-size:16px;font-weight:600;letter-spacing:-.2px;
-  cursor:pointer;transition:all .15s;-webkit-appearance:none;
-  margin-bottom:4px;
-  box-shadow:0 2px 10px rgba(0,113,227,.28);
+  position: sticky;
+  bottom: var(--bottom-ui-h); /* 完美悬停在资源条的绝对上方 */
+  z-index: 45;
+  width: 100%;
+  padding: 16px;
+  border: none;
+  border-radius: var(--r);
+  background: var(--ac);
+  color: #fff;
+  font-family: var(--font);
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -.2px;
+  cursor: pointer;
+  transition: all .15s;
+  -webkit-appearance: none;
+  margin-top: 10px; /* 让它在划到绝对底部时与上面模块有一点呼吸感 */
+  box-shadow: 0 4px 16px rgba(0,113,227,.45); /* 增强悬浮立体感 */
 }
 #gen-btn:active{transform:scale(.98);background:var(--ac-hover)}
 #gen-btn:disabled{background:var(--bg3);color:var(--text3);box-shadow:none;cursor:not-allowed;transform:none}
@@ -356,7 +371,7 @@ input[type=range]:active::-webkit-slider-thumb{transform:scale(1.15)}
         </div>
       </div>
 
-      <button id="gen-btn" onclick="generate()">生成</button>
+      <button id="gen-btn" onclick="generate()">生成大片</button>
 
     </div>
 
@@ -507,8 +522,6 @@ let uploadedImage = null;
 let sessionFiles = []; 
 let tasks = [];       
 let taskIdCounter = 0;
-
-// 全局变量，记录当前 Lightbox 正在查看的文件
 let lbCurrentSrc = null;
 let lbCurrentType = null;
 
@@ -699,9 +712,6 @@ function onImageSelect(input) {
   preview.style.display = 'block';
 }
 
-// ══════════════════════════════════════════════════════════════════
-// Generate (带极致超时处理保护)
-// ══════════════════════════════════════════════════════════════════
 async function generate() {
   const api = getApi();
   if (!api) { toast('请先在「参数」填写 API 地址'); switchTab('settings'); return; }
@@ -765,7 +775,6 @@ async function generate() {
     fd.append('params', JSON.stringify(params));
     if (meta.requires_image && task.imageFile) fd.append('image', task.imageFile);
 
-    // 捕获网络超时，但不当做真正的错误
     const resp = await fetch(api + '/api/generate', { method: 'POST', body: fd }).catch(e => {
         throw new Error('NETWORK_TIMEOUT');
     });
@@ -791,12 +800,11 @@ async function generate() {
     addToHistory(first.url, first.type);
 
   } catch(err) {
-    // ✅ 【神级优化】：针对网关强制断开的完美宽慰提示
     if (err.message === 'NETWORK_TIMEOUT' || err.message.includes('fetch')) {
-        task.status = 'done'; // 停止转圈，假装完成
+        task.status = 'done';
         task.url = null;
         setStatus('ready', '就绪');
-        toast('⏳ 连接已断开，但这说明 A100 仍在后台努力渲染长视频！\n\n请不要刷新网页，喝杯茶，几分钟后去【资源库】点击「🔄 同步 R2」即可收获高清大片！');
+        toast('⏳ 连接已自动断开，但这说明 A100 仍在后台努力渲染长视频！\n\n喝杯茶，几分钟后去【资源库】点击「🔄 同步 R2」即可收获大片！');
     } else {
         task.status = 'error';
         setStatus('error', '失败');
@@ -806,7 +814,7 @@ async function generate() {
     busy = false;
     clearInterval(timer);
     document.getElementById('prog').classList.remove('show');
-    btn.disabled = false; btn.textContent = '生成';
+    btn.disabled = false; btn.textContent = '生成大片';
     renderStrip();
   }
 }
@@ -831,15 +839,11 @@ function showResult(src, isVid) {
   }
 }
 
-// （主页旧的续写按钮保留供快速操作，提取逻辑复用下面的 Lightbox 逻辑）
 async function extendVideo() {
     openLb(lastSrc, lastIsVid ? 'vid' : 'img');
-    setTimeout(lbAction, 300); // 借用画廊的魔法按钮逻辑
+    setTimeout(lbAction, 300);
 }
 
-// ══════════════════════════════════════════════════════════════════
-// 任务队列条
-// ══════════════════════════════════════════════════════════════════
 function loadStrip() { renderStrip(); }
 
 function renderStrip() {
@@ -892,9 +896,6 @@ function renderStrip() {
   });
 }
 
-// ══════════════════════════════════════════════════════════════════
-// Gallery（本地秒开版资源库）
-// ══════════════════════════════════════════════════════════════════
 function loadGallery() {
   allFiles = getGalleryCache();
   renderGalleryFilters();
@@ -961,9 +962,6 @@ async function delFile(filename, e) {
   r2Delete(filename).catch(err => toast('R2 删除失败：' + err.message));
 }
 
-// ══════════════════════════════════════════════════════════════════
-// 全新 Lightbox (资源库万能魔法枢纽)
-// ══════════════════════════════════════════════════════════════════
 function openLb(src, type) {
   lbCurrentSrc = src;
   lbCurrentType = type;
@@ -972,7 +970,6 @@ function openLb(src, type) {
   const vid = document.getElementById('lb-vid');
   const actionBtn = document.getElementById('lb-action-btn');
 
-  // ✅ 核心魔法：不再把视频弹出版原生全屏，而是真的放在 Lightbox 里播放，从而显示我们的魔法按钮！
   if (type === 'vid') {
     img.style.display = 'none'; img.src = '';
     vid.src = src; vid.style.display = 'block';
@@ -992,11 +989,9 @@ function closeLb() {
     lbCurrentSrc = null;
 }
 
-// 魔法按钮执行动作（图生视频 / 截帧续写）
 async function lbAction() {
   if (!lbCurrentSrc) return;
   
-  // 1️⃣ 提取图片用作图生视频
   if (lbCurrentType === 'img' || lbCurrentType === 'gif') {
       toast('正在为您提取图片...');
       try {
@@ -1011,15 +1006,13 @@ async function lbAction() {
           preview.src = URL.createObjectURL(blob);
           preview.style.display = 'block';
           
-          selectWf('wan2vid'); // 强制切换到图生视频
+          selectWf('wan2vid'); 
           closeLb();
           switchTab('create');
           document.getElementById('panels').scrollTo({top: 0, behavior: 'smooth'});
           toast('✅ 已成功加载为参考图！请输入您的动作提示词。');
       } catch(e) { toast('提取失败: ' + e.message); }
   } 
-  
-  // 2️⃣ 提取视频最后一帧用于续写
   else if (lbCurrentType === 'vid') {
       toast('正在精准抓取视频最后一帧...');
       try {
@@ -1033,7 +1026,7 @@ async function lbAction() {
           tempVid.playsInline = true;
           
           tempVid.addEventListener('loadeddata', () => {
-              tempVid.currentTime = Math.max(0, tempVid.duration - 0.05); // 避开黑屏卡最后一点
+              tempVid.currentTime = Math.max(0, tempVid.duration - 0.05); 
           });
           
           tempVid.addEventListener('seeked', () => {
@@ -1060,7 +1053,7 @@ async function lbAction() {
                   closeLb();
                   switchTab('create');
                   document.getElementById('panels').scrollTo({top: 0, behavior: 'smooth'});
-                  toast('✅ 最后一帧抓取成功！请修改新的动作指令，它将无缝续写。');
+                  toast('✅ 最后一帧抓取成功！请修改动作指令进行无缝续写。');
               }, 'image/png');
           });
       } catch (e) { toast('抓取失败: ' + e.message); }
@@ -1080,7 +1073,6 @@ async function lbSave() {
       a.click();
       URL.revokeObjectURL(url);
   } catch {
-      // 降级方案
       const a = document.createElement('a');
       a.href = lbCurrentSrc;
       a.download = 'ai-' + Date.now() + (isV ? '.mp4' : '.png');
@@ -1088,7 +1080,6 @@ async function lbSave() {
   }
 }
 
-// 后备保存与分享
 async function saveResult() {
   if (!lastSrc) return;
   try {
@@ -1113,9 +1104,6 @@ async function shareResult() {
   } catch { await saveResult(); }
 }
 
-// ══════════════════════════════════════════════════════════════════
-// Utils (主动连接 Modal)
-// ══════════════════════════════════════════════════════════════════
 function getApi() { return (localStorage.getItem('api_url')||'').replace(/\/$/,''); }
 function switchTab(name) {
   document.querySelectorAll('.tab-item').forEach(t=>t.classList.remove('active'));
@@ -1136,7 +1124,7 @@ function setStatus(s, t) {
 function toast(msg) {
   const el = document.getElementById('toast');
   el.textContent = msg; el.classList.add('show');
-  clearTimeout(toastT); toastT = setTimeout(()=>el.classList.remove('show'), 6000); // 增加 toast 停留时间
+  clearTimeout(toastT); toastT = setTimeout(()=>el.classList.remove('show'), 6000); 
 }
 
 async function refreshWorkflows() {
