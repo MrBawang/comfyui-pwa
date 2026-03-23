@@ -31,7 +31,6 @@
   --font:-apple-system,'Helvetica Neue',sans-serif;
   --tab-h:83px;
   --strip-h:96px; 
-  /* ✅ 统一计算底部安全区 + UI条的高度，用于完美悬浮 */
   --bottom-ui-h: calc(var(--sab) + var(--tab-h) + var(--strip-h) + 16px);
 }
 @media(prefers-color-scheme:dark){:root{
@@ -46,7 +45,6 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
 
 #app{display:flex;flex-direction:column;height:100dvh;max-width:430px;margin:0 auto;position:relative}
 
-/* ── Navbar ── */
 #navbar{
   padding:calc(var(--sat) + 12px) 20px 8px;
   display:flex;align-items:center;justify-content:space-between;
@@ -61,7 +59,6 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
 .sdot.ready{background:#34c759}.sdot.busy{background:#ff9f0a;animation:sdot-pulse 1.2s ease-in-out infinite}.sdot.error{background:#ff3b30}
 @keyframes sdot-pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.4;transform:scale(.75)}}
 
-/* ── Workflow Pills ── */
 #wf-bar{
   padding:8px 16px 0;display:flex;gap:6px;overflow-x:auto;
   -webkit-overflow-scrolling:touch;scrollbar-width:none;
@@ -78,24 +75,20 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--f
 .wf-pill.active{background:var(--ac2);color:var(--ac);border-color:var(--ac)}
 .wf-pill:active{opacity:.7}
 
-/* ── Panels ── */
 #panels{flex:1;overflow:hidden;position:relative;margin-top:8px}
 .panel{
   position:absolute;inset:0;
   overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;
   opacity:0;pointer-events:none;transform:translateY(6px);
   transition:opacity .18s ease,transform .18s ease;
-  /* ✅ 统一底部留白距离 */
   padding:0 16px var(--bottom-ui-h);
 }
 .panel.active{opacity:1;pointer-events:auto;transform:translateY(0)}
 .panel::-webkit-scrollbar{display:none}
 
-/* ── Card ── */
 .card{background:var(--bg2);border-radius:var(--r);padding:18px;margin-bottom:10px;box-shadow:var(--sh)}
 .card-title{font-size:12px;font-weight:500;color:var(--text2);letter-spacing:.2px;margin-bottom:10px}
 
-/* ── Input ── */
 textarea,input[type=text]{
   width:100%;background:var(--bg3);border:none;border-radius:var(--rsm);
   color:var(--text);font-family:var(--font);font-size:15px;font-weight:400;
@@ -114,7 +107,6 @@ select{
   background-repeat:no-repeat;background-position:right 14px center;
 }
 
-/* ── Image Upload ── */
 #img-upload-area{
   border:1.5px dashed var(--sep);border-radius:var(--rsm);
   padding:20px;text-align:center;cursor:pointer;
@@ -127,7 +119,6 @@ select{
 #upload-preview{width:100%;max-height:160px;object-fit:cover;border-radius:var(--rxs);display:none;margin-top:8px}
 .upload-hint{font-size:13px;color:var(--text3)}
 
-/* ── Result ── */
 #result-wrap{
   background:var(--bg2);border-radius:var(--r);overflow:hidden;
   margin-bottom:10px;box-shadow:var(--sh);
@@ -139,7 +130,6 @@ select{
 .ph-text{font-size:14px;text-align:center;line-height:1.6}
 #result-img,#result-vid{width:100%;display:none;border-radius:var(--r)}
 
-/* ── Progress ── */
 #prog{
   display:none;position:absolute;inset:0;
   background:rgba(255,255,255,.9);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
@@ -155,7 +145,6 @@ select{
 #prog-time{font-size:28px;font-weight:300;font-variant-numeric:tabular-nums;letter-spacing:-.5px}
 #prog-label{font-size:13px;color:var(--text2);text-align:center;max-width:180px;line-height:1.4}
 
-/* ── Result Actions ── */
 #result-actions{display:none;padding:10px 14px;gap:8px;width:100%}
 .act-btn{
   flex:1;padding:10px 8px;border:none;border-radius:var(--rsm);
@@ -166,7 +155,6 @@ select{
 .act-btn.primary{background:var(--ac);color:#fff}
 .act-btn:active{opacity:.8;transform:scale(.97)}
 
-/* ── Slider ── */
 .sl-row{display:flex;align-items:center;gap:12px;margin-top:4px}
 input[type=range]{
   flex:1;-webkit-appearance:none;height:4px;border-radius:99px;
@@ -180,12 +168,10 @@ input[type=range]::-webkit-slider-thumb{
 input[type=range]:active::-webkit-slider-thumb{transform:scale(1.15)}
 .sl-val{font-size:14px;font-weight:500;min-width:36px;text-align:right;font-variant-numeric:tabular-nums}
 
-/* ── Info Row ── */
 .info-row{display:flex;justify-content:space-between;align-items:center;padding:11px 0;font-size:14px;border-bottom:1px solid var(--sep)}
 .info-row:last-child{border-bottom:none;padding-bottom:0}
 .info-label{color:var(--text2)}.info-val{font-weight:500;font-size:13px}
 
-/* ── Gallery Panel ── */
 .g-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .g-item{border-radius:var(--rsm);overflow:hidden;cursor:pointer;background:var(--bg2);box-shadow:var(--sh);position:relative;aspect-ratio:1}
 .g-item img,.g-item video{width:100%;height:100%;object-fit:cover;display:block}
@@ -197,13 +183,11 @@ input[type=range]:active::-webkit-slider-thumb{transform:scale(1.15)}
 .gallery-spinner{width:28px;height:28px;border:2.5px solid var(--sep);border-top-color:var(--ac);border-radius:50%;animation:spin .7s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
 
-/* ── Filter Tabs ── */
 .filter-row{display:flex;gap:6px;margin-bottom:12px;overflow-x:auto;scrollbar-width:none}
 .filter-row::-webkit-scrollbar{display:none}
 .f-chip{flex-shrink:0;padding:5px 12px;border-radius:99px;background:var(--bg3);color:var(--text2);font-size:12px;font-weight:500;cursor:pointer;border:1.5px solid transparent;white-space:nowrap;font-family:var(--font);-webkit-appearance:none;outline:none}
 .f-chip.active{background:var(--ac2);color:var(--ac);border-color:var(--ac)}
 
-/* ── Bottom Strip (常驻资源条) ── */
 #strip{
   position:fixed;bottom:var(--tab-h);left:50%;transform:translateX(-50%);
   width:100%;max-width:430px;
@@ -243,7 +227,6 @@ input[type=range]:active::-webkit-slider-thumb{transform:scale(1.15)}
 .task-status-dot.done{background:#34c759}
 .task-status-dot.error{background:#ff3b30}
 
-/* ── Tab Bar ── */
 #tabbar{
   position:fixed;bottom:0;left:50%;transform:translateX(-50%);
   width:100%;max-width:430px;height:var(--tab-h);
@@ -264,10 +247,9 @@ input[type=range]:active::-webkit-slider-thumb{transform:scale(1.15)}
 .tab-label{font-size:10px;font-weight:500;color:var(--text3);transition:color .15s}
 .tab-item.active .tab-label{color:var(--ac)}
 
-/* ── Gen Button (✅ 升级为智能悬浮锁底模式) ── */
 #gen-btn{
   position: sticky;
-  bottom: var(--bottom-ui-h); /* 完美悬停在资源条的绝对上方 */
+  bottom: var(--bottom-ui-h); 
   z-index: 45;
   width: 100%;
   padding: 16px;
@@ -282,13 +264,12 @@ input[type=range]:active::-webkit-slider-thumb{transform:scale(1.15)}
   cursor: pointer;
   transition: all .15s;
   -webkit-appearance: none;
-  margin-top: 10px; /* 让它在划到绝对底部时与上面模块有一点呼吸感 */
-  box-shadow: 0 4px 16px rgba(0,113,227,.45); /* 增强悬浮立体感 */
+  margin-top: 10px; 
+  box-shadow: 0 4px 16px rgba(0,113,227,.45); 
 }
 #gen-btn:active{transform:scale(.98);background:var(--ac-hover)}
 #gen-btn:disabled{background:var(--bg3);color:var(--text3);box-shadow:none;cursor:not-allowed;transform:none}
 
-/* ── Lightbox ── */
 #lb{
   display:none;position:fixed;inset:0;
   background:rgba(0,0,0,.92);backdrop-filter:blur(30px);-webkit-backdrop-filter:blur(30px);
@@ -304,7 +285,6 @@ input[type=range]:active::-webkit-slider-thumb{transform:scale(1.15)}
 .lb-btn.magic{background:var(--ac);color:#fff;box-shadow:0 2px 10px rgba(0,113,227,.4);flex:100%;}
 .lb-btn:active{opacity:.75}
 
-/* ── Toast ── */
 #toast{
   position:fixed;top:calc(var(--sat)+58px);left:50%;
   transform:translateX(-50%) translateY(-4px);
@@ -335,7 +315,7 @@ input[type=range]:active::-webkit-slider-thumb{transform:scale(1.15)}
 
       <div class="card" style="margin-top:10px">
         <div class="card-title">描述画面 (支持纯中文)</div>
-        <textarea id="prompt" placeholder="描述你想生成的视频画面..." rows="4"></textarea>
+        <textarea id="prompt" placeholder="描述你想生成的内容..." rows="4"></textarea>
       </div>
 
       <div class="card" id="img-card" style="display:none">
@@ -371,7 +351,7 @@ input[type=range]:active::-webkit-slider-thumb{transform:scale(1.15)}
         </div>
       </div>
 
-      <button id="gen-btn" onclick="generate()">生成大片</button>
+      <button id="gen-btn" onclick="generate()">生成</button>
 
     </div>
 
@@ -393,16 +373,20 @@ input[type=range]:active::-webkit-slider-thumb{transform:scale(1.15)}
 
       <div class="card">
         <div class="card-title">生成参数</div>
-        <div class="info-row" style="padding-top:0;border-bottom:none">
-          <span class="info-label">图片尺寸</span>
+        
+        <div id="size-row">
+          <div class="info-row" style="padding-top:0;border-bottom:none">
+            <span class="info-label">图片尺寸</span>
+          </div>
+          <select id="size" style="margin-bottom:14px">
+            <option value="480x832" selected>480 × 832（Wan2 推荐）</option>
+            <option value="720x1280">720 × 1280（竖版）</option>
+            <option value="1280x720">1280 × 720（横版）</option>
+            <option value="1024x1024">1024 × 1024（方形）</option>
+            <option value="832x1216">832 × 1216（竖版 2）</option>
+          </select>
         </div>
-        <select id="size" style="margin-bottom:14px">
-          <option value="480x832" selected>480 × 832（Wan2 推荐）</option>
-          <option value="720x1280">720 × 1280（竖版）</option>
-          <option value="1280x720">1280 × 720（横版）</option>
-          <option value="1024x1024">1024 × 1024（方形）</option>
-          <option value="832x1216">832 × 1216（竖版 2）</option>
-        </select>
+
         <div id="vid-params" style="display:none">
           <div class="info-row" style="padding-top:0;border-bottom:none">
             <span class="info-label">视频时长（秒）</span>
@@ -429,12 +413,12 @@ input[type=range]:active::-webkit-slider-thumb{transform:scale(1.15)}
         <div id="upscale-hint" style="font-size:12px;color:var(--text3);margin-top:4px;display:none">开启后将逐帧放大画面，由于耗时较长，请留意同步资源库获取</div>
 
         <div class="info-row" style="padding-top:0;border-bottom:none;margin-top:14px">
-          <span class="info-label">推理步数</span>
+          <span class="info-label">推理步数 / Flux 步数</span>
           <span class="info-val" id="steps-v">10</span>
         </div>
         <div class="sl-row"><input type="range" id="steps" min="4" max="30" value="10" oninput="sl(this,'steps-v',1)"></div>
         <div class="info-row" style="padding-bottom:0;border-bottom:none;margin-top:14px">
-          <span class="info-label">CFG Scale</span>
+          <span class="info-label">CFG / Flux Guidance</span>
           <span class="info-val" id="cfg-v">1.0</span>
         </div>
         <div class="sl-row"><input type="range" id="cfg" min="10" max="150" value="10" oninput="sl(this,'cfg-v',0.1)"></div>
@@ -447,9 +431,7 @@ input[type=range]:active::-webkit-slider-thumb{transform:scale(1.15)}
 
       <div class="card">
         <div class="card-title">关于</div>
-        <div class="info-row" style="padding-top:0"><span class="info-label">模型</span><span class="info-val">Z-image-ZiT / Wan2.2</span></div>
-        <div class="info-row"><span class="info-label">放大</span><span class="info-val">4x-UltraSharp × 2</span></div>
-        <div class="info-row"><span class="info-label">音效</span><span class="info-val">后期剪映合成 (推荐)</span></div>
+        <div class="info-row" style="padding-top:0"><span class="info-label">核心模型</span><span class="info-val">Wan2.2 / Flux2</span></div>
         <div class="info-row"><span class="info-label">存储</span><span class="info-val">Cloudflare R2 直连</span></div>
       </div>
     </div>
@@ -508,9 +490,6 @@ input[type=range]:active::-webkit-slider-thumb{transform:scale(1.15)}
 <div id="toast"></div>
 
 <script>
-// ══════════════════════════════════════════════════════════════════
-// State
-// ══════════════════════════════════════════════════════════════════
 let busy = false, timer = null, elapsed = 0;
 let lastSrc = null, lastIsVid = false;
 let toastT = null;
@@ -525,30 +504,17 @@ let taskIdCounter = 0;
 let lbCurrentSrc = null;
 let lbCurrentType = null;
 
-// ══════════════════════════════════════════════════════════════════
-// Init
-// ══════════════════════════════════════════════════════════════════
 document.addEventListener('DOMContentLoaded', async () => {
   const savedApi = localStorage.getItem('api_url');
   if (savedApi) document.getElementById('api-url').value = savedApi;
-  
-  document.getElementById('api-url').addEventListener('blur', e => {
-    localStorage.setItem('api_url', e.target.value.trim());
-  });
+  document.getElementById('api-url').addEventListener('blur', e => localStorage.setItem('api_url', e.target.value.trim()));
 
   const savedR2 = localStorage.getItem('r2_worker_url');
-  if (savedR2) {
-    const el = document.getElementById('r2-worker-url');
-    if (el) el.value = savedR2;
-  }
-  document.getElementById('r2-worker-url')?.addEventListener('blur', e => {
-    localStorage.setItem('r2_worker_url', e.target.value.trim());
-  });
+  if (savedR2) document.getElementById('r2-worker-url').value = savedR2;
+  document.getElementById('r2-worker-url')?.addEventListener('blur', e => localStorage.setItem('r2_worker_url', e.target.value.trim()));
 
-  document.getElementById('negative').value =
-    localStorage.getItem('negative') || 'ugly, blurry, bad quality, watermark, deformed';
-  document.getElementById('negative').addEventListener('blur', e =>
-    localStorage.setItem('negative', e.target.value));
+  document.getElementById('negative').value = localStorage.getItem('negative') || 'ugly, blurry, bad quality, watermark, deformed';
+  document.getElementById('negative').addEventListener('blur', e => localStorage.setItem('negative', e.target.value));
 
   sl(document.getElementById('steps'), 'steps-v', 1);
   sl(document.getElementById('cfg'), 'cfg-v', 0.1);
@@ -568,8 +534,10 @@ async function init() {
       renderWfBar(workflows);
     } catch {}
   } else {
+    // ✅ 新增了 Flux2 重绘 的入口
     workflows = {
       txt2img: { name:'Z-image 质感', icon:'✦', output_type:'image', requires_image:false },
+      flux2_img: { name:'Flux2 重绘', icon:'👙', output_type:'image', requires_image:true },
       txt2vid: { name:'Wan2 文生视频', icon:'🎥', output_type:'video', requires_image:false },
       wan2vid: { name:'Wan2 图生视频', icon:'🎬', output_type:'video', requires_image:true }
     };
@@ -577,48 +545,31 @@ async function init() {
   }
   
   loadStrip();
-  if(document.getElementById('panel-gallery').classList.contains('active')) {
-    loadGallery();
-  }
+  if(document.getElementById('panel-gallery').classList.contains('active')) loadGallery();
 
   if (getR2Worker()) {
     r2List().then(files => {
       setGalleryCache(files); 
       allFiles = files;
       if(document.getElementById('panel-gallery').classList.contains('active')) {
-        renderGalleryFilters(); 
-        filterGallery();
+        renderGalleryFilters(); filterGallery();
       }
       loadStrip(); 
     }).catch(() => {}); 
   }
 }
 
-function getGalleryCache() {
-  try { return JSON.parse(localStorage.getItem('r2_gallery_cache') || '[]'); }
-  catch { return []; }
-}
-function setGalleryCache(files) {
-  localStorage.setItem('r2_gallery_cache', JSON.stringify(files));
-}
+function getGalleryCache() { try { return JSON.parse(localStorage.getItem('r2_gallery_cache') || '[]'); } catch { return []; } }
+function setGalleryCache(files) { localStorage.setItem('r2_gallery_cache', JSON.stringify(files)); }
 
 function addToHistory(url, type) {
-  const item = {
-    filename: url.split('/').pop(),
-    url: url,
-    type: type,
-    workflow: currentWf,
-    workflow_name: workflows[currentWf]?.name || currentWf,
-    last_modified: new Date().toISOString()
-  };
+  const item = { filename: url.split('/').pop(), url: url, type: type, workflow: currentWf, workflow_name: workflows[currentWf]?.name || currentWf, last_modified: new Date().toISOString() };
   const cache = getGalleryCache();
   cache.unshift(item);
   setGalleryCache(cache.slice(0, 500));
   allFiles = getGalleryCache();
   const galleryPanel = document.getElementById('panel-gallery');
-  if (galleryPanel && galleryPanel.classList.contains('active')) {
-    renderGalleryFilters(); filterGallery();
-  }
+  if (galleryPanel && galleryPanel.classList.contains('active')) { renderGalleryFilters(); filterGallery(); }
 }
 
 function getR2Worker() { return (localStorage.getItem('r2_worker_url') || '').replace(/\/$/, ''); }
@@ -629,12 +580,10 @@ async function r2List() {
   if (!w) throw new Error('请先在「参数」配置 R2 Worker 地址');
   const data = await fetch(`${w}/list?pub=${encodeURIComponent(R2_PUB)}`).then(r => r.json());
   return (data.files || []).map(f => ({
-    filename: f.key,
-    url: f.url || `${R2_PUB}/${f.key}`,
+    filename: f.key, url: f.url || `${R2_PUB}/${f.key}`,
     type: /\.(mp4|webm)$/i.test(f.key) ? 'video' : 'image',
     workflow: f.key.split('/')[0] || 'unknown',
-    workflow_name: '',
-    last_modified: f.uploaded || new Date().toISOString(),
+    workflow_name: '', last_modified: f.uploaded || new Date().toISOString(),
   }));
 }
 
@@ -653,31 +602,26 @@ async function refreshGallery() {
   document.getElementById('g-count').textContent = '从 R2 读取中…';
   try {
     const files = await r2List();
-    setGalleryCache(files);
-    allFiles = files;
+    setGalleryCache(files); allFiles = files;
     renderGalleryFilters(); filterGallery();
     toast('✅ 同步完成！共拉取了 ' + files.length + ' 个文件');
   } catch(e) {
     toast('同步失败：' + e.message);
-    allFiles = getGalleryCache();
-    renderGalleryFilters(); filterGallery();
+    allFiles = getGalleryCache(); renderGalleryFilters(); filterGallery();
   } finally {
     if (btn) { btn.textContent = '🔄 同步 R2'; btn.disabled = false; }
   }
 }
 
 function renderWfBar(wfs) {
-  const bar = document.getElementById('wf-bar');
-  bar.innerHTML = '';
+  const bar = document.getElementById('wf-bar'); bar.innerHTML = '';
   const entries = Object.entries(wfs);
   if (!entries.length) return;
   entries.forEach(([id, meta]) => {
-    const pill = document.createElement('button');
-    pill.type = 'button';
+    const pill = document.createElement('button'); pill.type = 'button';
     pill.className = 'wf-pill' + (id === currentWf ? ' active' : '');
     pill.textContent = (meta.icon || '') + ' ' + meta.name;
-    pill.onclick = () => selectWf(id);
-    pill.id = 'wf-' + id;
+    pill.onclick = () => selectWf(id); pill.id = 'wf-' + id;
     bar.appendChild(pill);
   });
 }
@@ -690,6 +634,10 @@ function selectWf(id) {
   if (upscaleRow) upscaleRow.style.display = isWanVideo ? 'flex' : 'none';
   if (upscaleHint) upscaleHint.style.display = isWanVideo ? 'block' : 'none';
   
+  // 对于 Flux2，隐藏尺寸选项，因为尺寸由原图决定
+  const sizeRow = document.getElementById('size-row');
+  if (sizeRow) sizeRow.style.display = (id === 'flux2_img') ? 'none' : 'block';
+
   currentWf = id;
   document.querySelectorAll('.wf-pill').forEach(p => p.classList.remove('active'));
   const el = document.getElementById('wf-' + id);
@@ -721,39 +669,24 @@ async function generate() {
   if (meta.requires_image && !uploadedImage) { toast('请先上传参考图'); return; }
 
   const taskId = ++taskIdCounter;
-  const task = {
-    id: taskId,
-    prompt: prompt,
-    wf: currentWf,
-    wfName: workflows[currentWf]?.name || currentWf,
-    status: 'running', 
-    elapsed: 0,
-    url: null,
-    type: null,
-    imageFile: meta.requires_image ? uploadedImage : null,
-  };
-  tasks.unshift(task);
-  renderStrip();
+  const task = { id: taskId, prompt: prompt, wf: currentWf, wfName: workflows[currentWf]?.name || currentWf, status: 'running', elapsed: 0, url: null, type: null, imageFile: meta.requires_image ? uploadedImage : null };
+  tasks.unshift(task); renderStrip();
 
-  busy = true;
-  setStatus('busy', '生成中');
+  busy = true; setStatus('busy', '生成中');
   document.getElementById('result-actions').style.display = 'none';
   document.getElementById('result-ph').style.display = 'flex';
   document.getElementById('prog').classList.add('show');
-  elapsed = 0;
-  document.getElementById('prog-time').textContent = '0s';
-  document.getElementById('prog-label').textContent = '渲染画面中，极速出片…';
+  elapsed = 0; document.getElementById('prog-time').textContent = '0s';
+  document.getElementById('prog-label').textContent = '引擎启动中…';
   const btn = document.getElementById('gen-btn');
   btn.disabled = true; btn.textContent = '生成中…';
 
   timer = setInterval(() => {
-    elapsed++;
-    task.elapsed = elapsed;
-    document.getElementById('prog-time').textContent = elapsed + 's';
+    elapsed++; task.elapsed = elapsed; document.getElementById('prog-time').textContent = elapsed + 's';
     if (elapsed === 20) document.getElementById('prog-label').textContent = '加载极速模型中…';
-    if (elapsed === 50) document.getElementById('prog-label').textContent = '正在渲染高帧率视频…';
-    if (elapsed === 120) document.getElementById('prog-label').textContent = '正在逐帧进行超清画质重绘…';
-    if (elapsed === 250) document.getElementById('prog-label').textContent = '由于视频较长，稍后可能会断开连接，请勿担心…';
+    if (elapsed === 50) document.getElementById('prog-label').textContent = '正在渲染画面…';
+    if (elapsed === 120) document.getElementById('prog-label').textContent = '正在进行重绘或超清放大…';
+    if (elapsed === 250) document.getElementById('prog-label').textContent = '任务较大，稍后可能会断开连接，请勿担心…';
     renderStrip(); 
   }, 1000);
 
@@ -775,9 +708,7 @@ async function generate() {
     fd.append('params', JSON.stringify(params));
     if (meta.requires_image && task.imageFile) fd.append('image', task.imageFile);
 
-    const resp = await fetch(api + '/api/generate', { method: 'POST', body: fd }).catch(e => {
-        throw new Error('NETWORK_TIMEOUT');
-    });
+    const resp = await fetch(api + '/api/generate', { method: 'POST', body: fd }).catch(e => { throw new Error('NETWORK_TIMEOUT'); });
     
     if (resp.status === 504 || resp.status === 502) throw new Error('NETWORK_TIMEOUT');
     if (!resp.ok) throw new Error('HTTP ' + resp.status);
@@ -786,35 +717,29 @@ async function generate() {
     if (data.status !== 'ok' || !data.results?.length) throw new Error('未返回结果');
 
     const first = data.results[0];
-    task.status = 'done';
-    task.url = first.url;
-    task.type = first.type;
+    task.status = 'done'; task.url = first.url; task.type = first.type;
 
     const isVid = first.type === 'video';
     showResult(first.url, isVid);
     lastSrc = first.url; lastIsVid = isVid;
     
     document.getElementById('result-actions').style.display = 'flex';
-    setStatus('ready', '就绪');
-    toast('完成，用时 ' + elapsed + 's ✓');
+    setStatus('ready', '就绪'); toast('完成，用时 ' + elapsed + 's ✓');
     addToHistory(first.url, first.type);
 
   } catch(err) {
     if (err.message === 'NETWORK_TIMEOUT' || err.message.includes('fetch')) {
-        task.status = 'done';
-        task.url = null;
+        task.status = 'done'; task.url = null;
         setStatus('ready', '就绪');
-        toast('⏳ 连接已自动断开，但这说明 A100 仍在后台努力渲染长视频！\n\n喝杯茶，几分钟后去【资源库】点击「🔄 同步 R2」即可收获大片！');
+        toast('⏳ 连接已自动断开，但这说明 A100 仍在后台努力渲染！\n\n稍后去【资源库】点击「🔄 同步 R2」即可收获大片！');
     } else {
-        task.status = 'error';
-        setStatus('error', '失败');
+        task.status = 'error'; setStatus('error', '失败');
         toast('生成失败：' + err.message);
     }
   } finally {
-    busy = false;
-    clearInterval(timer);
+    busy = false; clearInterval(timer);
     document.getElementById('prog').classList.remove('show');
-    btn.disabled = false; btn.textContent = '生成大片';
+    btn.disabled = false; btn.textContent = '生成';
     renderStrip();
   }
 }
@@ -826,15 +751,10 @@ function showResult(src, isVid) {
   const extBtn = document.getElementById('extend-btn');
   
   if (isVid) { 
-    img.style.display='none'; 
-    vid.src=src; 
-    vid.style.display='block'; 
+    img.style.display='none'; vid.src=src; vid.style.display='block'; 
     if(extBtn) extBtn.style.display='block';
   } else { 
-    vid.style.display='none'; 
-    vid.src=''; 
-    img.src=src; 
-    img.style.display='block'; 
+    vid.style.display='none'; vid.src=''; img.src=src; img.style.display='block'; 
     if(extBtn) extBtn.style.display='none'; 
   }
 }
@@ -845,81 +765,42 @@ async function extendVideo() {
 }
 
 function loadStrip() { renderStrip(); }
-
 function renderStrip() {
-  const strip = document.getElementById('strip');
-  const empty = document.getElementById('strip-empty');
+  const strip = document.getElementById('strip'); const empty = document.getElementById('strip-empty');
   Array.from(strip.children).forEach(el => { if (el !== empty) el.remove(); });
 
-  if (!tasks.length) {
-    empty.style.display = 'block';
-    return;
-  }
+  if (!tasks.length) { empty.style.display = 'block'; return; }
   empty.style.display = 'none';
 
   tasks.forEach(task => {
-    const card = document.createElement('div');
-    card.className = 'task-card';
-    card.dataset.taskId = task.id;
-
+    const card = document.createElement('div'); card.className = 'task-card'; card.dataset.taskId = task.id;
     let thumbHtml = '';
-    if (task.status === 'running') {
-      thumbHtml = '<div class="t-spin"></div>';
-    } else if (task.status === 'error') {
-      thumbHtml = '<div class="t-err">✕</div>';
-    } else if (task.url) {
+    if (task.status === 'running') thumbHtml = '<div class="t-spin"></div>';
+    else if (task.status === 'error') thumbHtml = '<div class="t-err">✕</div>';
+    else if (task.url) {
       const isVid = task.type === 'video';
-      thumbHtml = isVid
-        ? `<video src="${task.url}" muted autoplay loop playsinline style="width:100%;height:100%;object-fit:cover"></video>`
-        : `<img src="${task.url}" style="width:100%;height:100%;object-fit:cover" loading="lazy">`;
+      thumbHtml = isVid ? `<video src="${task.url}" muted autoplay loop playsinline style="width:100%;height:100%;object-fit:cover"></video>` : `<img src="${task.url}" style="width:100%;height:100%;object-fit:cover" loading="lazy">`;
     }
-
     const dotClass = task.status;
-    const metaText = task.status === 'running'
-      ? `${task.elapsed}s…`
-      : task.status === 'done' ? (task.url ? `${task.elapsed}s · ${task.wfName}` : '后台渲染中, 稍后同步') : '生成失败';
+    const metaText = task.status === 'running' ? `${task.elapsed}s…` : task.status === 'done' ? (task.url ? `${task.elapsed}s · ${task.wfName}` : '后台渲染中, 稍后同步') : '生成失败';
 
-    card.innerHTML = `
-      <div class="task-thumb">${thumbHtml}</div>
-      <div class="task-info">
-        <div class="task-prompt">${task.prompt}</div>
-        <div class="task-meta">
-          <div class="task-status-dot ${dotClass}"></div>
-          <span>${metaText}</span>
-        </div>
-      </div>`;
-
-    if (task.status === 'done' && task.url) {
-      card.onclick = () => openLb(task.url, task.type === 'video' ? 'vid' : 'img');
-    }
+    card.innerHTML = `<div class="task-thumb">${thumbHtml}</div><div class="task-info"><div class="task-prompt">${task.prompt}</div><div class="task-meta"><div class="task-status-dot ${dotClass}"></div><span>${metaText}</span></div></div>`;
+    if (task.status === 'done' && task.url) card.onclick = () => openLb(task.url, task.type === 'video' ? 'vid' : 'img');
     strip.appendChild(card);
   });
 }
 
-function loadGallery() {
-  allFiles = getGalleryCache();
-  renderGalleryFilters();
-  filterGallery();
-}
-
+function loadGallery() { allFiles = getGalleryCache(); renderGalleryFilters(); filterGallery(); }
 function renderGalleryFilters() {
-  const row = document.getElementById('g-filters');
-  row.innerHTML = '';
+  const row = document.getElementById('g-filters'); row.innerHTML = '';
   const wfIds = [...new Set(allFiles.map(f => f.workflow))];
   const chips = [{ id: 'all', label: '全部' }];
   wfIds.forEach(id => chips.push({ id, label: (workflows[id]?.name || id) }));
   
   chips.forEach(({ id, label }) => {
-    const c = document.createElement('button');
-    c.className = 'f-chip' + (galleryFilter === id ? ' active' : '');
-    c.textContent = label;
-    c.type = 'button';
-    c.onclick = () => { 
-      galleryFilter = id; 
-      Array.from(row.children).forEach(btn => btn.classList.remove('active'));
-      c.classList.add('active');
-      filterGallery(); 
-    };
+    const c = document.createElement('button'); c.className = 'f-chip' + (galleryFilter === id ? ' active' : '');
+    c.textContent = label; c.type = 'button';
+    c.onclick = () => { galleryFilter = id; Array.from(row.children).forEach(btn => btn.classList.remove('active')); c.classList.add('active'); filterGallery(); };
     row.appendChild(c);
   });
 }
@@ -930,20 +811,16 @@ function filterGallery() {
 }
 
 function renderGallery(files) {
-  const grid = document.getElementById('g-grid');
-  const empty = document.getElementById('g-empty');
-  const count = document.getElementById('g-count');
+  const grid = document.getElementById('g-grid'); const empty = document.getElementById('g-empty'); const count = document.getElementById('g-count');
   grid.innerHTML = '';
-  if (!files.length) { empty.style.display='block'; count.textContent='资源库'; grid.innerHTML=''; return; }
-  empty.style.display = 'none';
-  count.textContent = files.length + ' 项';
+  if (!files.length) { empty.style.display='block'; count.textContent='资源库'; return; }
+  empty.style.display = 'none'; count.textContent = files.length + ' 项';
   files.forEach(f => {
     const isVid = f.type === 'video';
     const div = document.createElement('div'); div.className = 'g-item';
     if (isVid) div.innerHTML = `<video src="${f.url}" loop autoplay muted playsinline></video><div class="g-badge">VIDEO</div>`;
     else if (f.type === 'gif') div.innerHTML = `<img src="${f.url}" loading="lazy" alt=""><div class="g-badge">GIF</div>`;
     else div.innerHTML = `<img src="${f.url}" loading="lazy" alt="">`;
-    
     if (f.workflow_name) div.innerHTML += `<div class="g-wf-badge">${f.workflow_name}</div>`;
     div.innerHTML += `<button class="g-del" onclick="delFile('${f.filename}',event)">×</button>`;
     div.querySelector(isVid ? 'video' : 'img').onclick = () => openLb(f.url, isVid?'vid':'img');
@@ -955,39 +832,26 @@ async function delFile(filename, e) {
   e.stopPropagation();
   if (!confirm('删除此文件？将同时从 R2 删除。')) return;
   const cache = getGalleryCache().filter(f => f.filename !== filename);
-  setGalleryCache(cache);
-  allFiles = cache;
-  toast('已删除');
+  setGalleryCache(cache); allFiles = cache; toast('已删除');
   renderGalleryFilters(); filterGallery();
   r2Delete(filename).catch(err => toast('R2 删除失败：' + err.message));
 }
 
 function openLb(src, type) {
-  lbCurrentSrc = src;
-  lbCurrentType = type;
-  
-  const img = document.getElementById('lb-img');
-  const vid = document.getElementById('lb-vid');
-  const actionBtn = document.getElementById('lb-action-btn');
+  lbCurrentSrc = src; lbCurrentType = type;
+  const img = document.getElementById('lb-img'); const vid = document.getElementById('lb-vid'); const actionBtn = document.getElementById('lb-action-btn');
 
   if (type === 'vid') {
-    img.style.display = 'none'; img.src = '';
-    vid.src = src; vid.style.display = 'block';
+    img.style.display = 'none'; img.src = ''; vid.src = src; vid.style.display = 'block';
     actionBtn.textContent = '🪄 截取最后1帧，无缝续写此视频';
   } else {
-    vid.style.display = 'none'; vid.src = '';
-    img.src = src; img.style.display = 'block';
-    actionBtn.textContent = '🖼️ 提取此图片，用作图生视频';
+    vid.style.display = 'none'; vid.src = ''; img.src = src; img.style.display = 'block';
+    actionBtn.textContent = '🖼️ 提取此图片，用作参考图重绘/视频';
   }
-  
   document.getElementById('lb').classList.add('show');
 }
 
-function closeLb() { 
-    document.getElementById('lb').classList.remove('show'); 
-    document.getElementById('lb-vid').src = ''; 
-    lbCurrentSrc = null;
-}
+function closeLb() { document.getElementById('lb').classList.remove('show'); document.getElementById('lb-vid').src = ''; lbCurrentSrc = null; }
 
 async function lbAction() {
   if (!lbCurrentSrc) return;
@@ -995,63 +859,37 @@ async function lbAction() {
   if (lbCurrentType === 'img' || lbCurrentType === 'gif') {
       toast('正在为您提取图片...');
       try {
-          const resp = await fetch(lbCurrentSrc);
-          const blob = await resp.blob();
+          const resp = await fetch(lbCurrentSrc); const blob = await resp.blob();
           const file = new File([blob], 'gallery_source.png', { type: blob.type });
           uploadedImage = file;
-          
           const preview = document.getElementById('upload-preview');
           document.getElementById('upload-hint').style.display = 'none';
           document.getElementById('img-upload-area').classList.add('has-img');
-          preview.src = URL.createObjectURL(blob);
-          preview.style.display = 'block';
+          preview.src = URL.createObjectURL(blob); preview.style.display = 'block';
           
-          selectWf('wan2vid'); 
-          closeLb();
-          switchTab('create');
+          closeLb(); switchTab('create');
           document.getElementById('panels').scrollTo({top: 0, behavior: 'smooth'});
-          toast('✅ 已成功加载为参考图！请输入您的动作提示词。');
+          toast('✅ 已成功加载为参考图！现在可以用于图生视频或 Flux2 重绘。');
       } catch(e) { toast('提取失败: ' + e.message); }
   } 
   else if (lbCurrentType === 'vid') {
       toast('正在精准抓取视频最后一帧...');
       try {
-          const resp = await fetch(lbCurrentSrc);
-          const vidBlob = await resp.blob();
-          const vidUrl = URL.createObjectURL(vidBlob);
-          
-          const tempVid = document.createElement('video');
-          tempVid.src = vidUrl;
-          tempVid.muted = true;
-          tempVid.playsInline = true;
-          
-          tempVid.addEventListener('loadeddata', () => {
-              tempVid.currentTime = Math.max(0, tempVid.duration - 0.05); 
-          });
-          
+          const resp = await fetch(lbCurrentSrc); const vidBlob = await resp.blob(); const vidUrl = URL.createObjectURL(vidBlob);
+          const tempVid = document.createElement('video'); tempVid.src = vidUrl; tempVid.muted = true; tempVid.playsInline = true;
+          tempVid.addEventListener('loadeddata', () => { tempVid.currentTime = Math.max(0, tempVid.duration - 0.05); });
           tempVid.addEventListener('seeked', () => {
-              const canvas = document.createElement('canvas');
-              canvas.width = tempVid.videoWidth;
-              canvas.height = tempVid.videoHeight;
-              const ctx = canvas.getContext('2d');
-              ctx.drawImage(tempVid, 0, 0, canvas.width, canvas.height);
-              
+              const canvas = document.createElement('canvas'); canvas.width = tempVid.videoWidth; canvas.height = tempVid.videoHeight;
+              const ctx = canvas.getContext('2d'); ctx.drawImage(tempVid, 0, 0, canvas.width, canvas.height);
               canvas.toBlob((blob) => {
                   URL.revokeObjectURL(vidUrl);
                   if (!blob) { toast('提取帧失败'); return; }
-                  
-                  const file = new File([blob], 'extend_frame.png', { type: 'image/png' });
-                  uploadedImage = file;
-                  
+                  const file = new File([blob], 'extend_frame.png', { type: 'image/png' }); uploadedImage = file;
                   const preview = document.getElementById('upload-preview');
-                  document.getElementById('upload-hint').style.display = 'none';
-                  document.getElementById('img-upload-area').classList.add('has-img');
-                  preview.src = URL.createObjectURL(blob);
-                  preview.style.display = 'block';
+                  document.getElementById('upload-hint').style.display = 'none'; document.getElementById('img-upload-area').classList.add('has-img');
+                  preview.src = URL.createObjectURL(blob); preview.style.display = 'block';
                   
-                  selectWf('wan2vid');
-                  closeLb();
-                  switchTab('create');
+                  selectWf('wan2vid'); closeLb(); switchTab('create');
                   document.getElementById('panels').scrollTo({top: 0, behavior: 'smooth'});
                   toast('✅ 最后一帧抓取成功！请修改动作指令进行无缝续写。');
               }, 'image/png');
@@ -1064,30 +902,18 @@ async function lbSave() {
   if (!lbCurrentSrc) return;
   const isV = (lbCurrentType === 'vid');
   try {
-      const resp = await fetch(lbCurrentSrc);
-      const blob = await resp.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url; 
-      a.download = 'ai-' + Date.now() + (isV ? '.mp4' : '.png'); 
-      a.click();
-      URL.revokeObjectURL(url);
+      const resp = await fetch(lbCurrentSrc); const blob = await resp.blob(); const url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href = url; a.download = 'ai-' + Date.now() + (isV ? '.mp4' : '.png'); a.click(); URL.revokeObjectURL(url);
   } catch {
-      const a = document.createElement('a');
-      a.href = lbCurrentSrc;
-      a.download = 'ai-' + Date.now() + (isV ? '.mp4' : '.png');
-      a.click();
+      const a = document.createElement('a'); a.href = lbCurrentSrc; a.download = 'ai-' + Date.now() + (isV ? '.mp4' : '.png'); a.click();
   }
 }
 
 async function saveResult() {
   if (!lastSrc) return;
   try {
-    const blob = await fetch(lastSrc).then(r => r.blob());
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = 'ai-' + Date.now() + (lastIsVid ? '.mp4' : '.png'); a.click();
-    URL.revokeObjectURL(url);
+    const blob = await fetch(lastSrc).then(r => r.blob()); const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = 'ai-' + Date.now() + (lastIsVid ? '.mp4' : '.png'); a.click(); URL.revokeObjectURL(url);
     toast('已保存');
   } catch { toast('请长按图片保存'); }
 }
@@ -1095,12 +921,9 @@ async function saveResult() {
 async function shareResult() {
   if (!lastSrc) return;
   try {
-    const blob = await fetch(lastSrc).then(r => r.blob());
-    const ext = lastIsVid ? 'mp4' : 'png';
+    const blob = await fetch(lastSrc).then(r => r.blob()); const ext = lastIsVid ? 'mp4' : 'png';
     const file = new File([blob], 'ai.' + ext, { type: blob.type });
-    if (navigator.share && navigator.canShare({ files: [file] })) {
-      await navigator.share({ files: [file], title: 'AI 生成', text: document.getElementById('prompt').value });
-    } else { await saveResult(); }
+    if (navigator.share && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: 'AI 生成', text: document.getElementById('prompt').value }); } else { await saveResult(); }
   } catch { await saveResult(); }
 }
 
@@ -1110,52 +933,29 @@ function switchTab(name) {
   document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
   document.getElementById('tab-'+name).classList.add('active');
   document.getElementById('panel-'+name).classList.add('active');
-  if (name==='gallery') {
-    setTimeout(loadGallery, 200);
-  }
+  if (name==='gallery') setTimeout(loadGallery, 200);
 }
-function sl(el, vid, factor) {
-  document.getElementById(vid).textContent = (el.value*factor).toFixed(factor<1?1:0);
-}
-function setStatus(s, t) {
-  document.getElementById('sdot').className = 'sdot ' + s;
-  document.getElementById('stxt').textContent = t;
-}
+function sl(el, vid, factor) { document.getElementById(vid).textContent = (el.value*factor).toFixed(factor<1?1:0); }
+function setStatus(s, t) { document.getElementById('sdot').className = 'sdot ' + s; document.getElementById('stxt').textContent = t; }
 function toast(msg) {
-  const el = document.getElementById('toast');
-  el.textContent = msg; el.classList.add('show');
+  const el = document.getElementById('toast'); el.textContent = msg; el.classList.add('show');
   clearTimeout(toastT); toastT = setTimeout(()=>el.classList.remove('show'), 6000); 
 }
 
-async function refreshWorkflows() {
-  await manualConnect();
-}
-
+async function refreshWorkflows() { await manualConnect(); }
 async function manualConnect() {
   if (busy) return;
-  const api = getApi();
-  if (!api) { toast('请先在「参数」填写 API 地址'); return; }
-  const dot = document.getElementById('sdot');
-  const txt = document.getElementById('stxt');
-  dot.className = 'sdot connecting';
-  txt.textContent = '连接中…';
+  const api = getApi(); if (!api) { toast('请先在「参数」填写 API 地址'); return; }
+  const dot = document.getElementById('sdot'); const txt = document.getElementById('stxt');
+  dot.className = 'sdot connecting'; txt.textContent = '连接中…';
   try {
     const resp = await fetch(api + '/api/workflows', { signal: AbortSignal.timeout(15000) });
     if (resp.ok) {
-      const data = await resp.json();
-      workflows = data.workflows || {};
+      const data = await resp.json(); workflows = data.workflows || {};
       localStorage.setItem('cached_workflows', JSON.stringify(workflows));
-      renderWfBar(workflows);
-      setStatus('ready', '已连接');
-      toast('连接成功，工作流已同步 ✓');
-    } else {
-      setStatus('error', '连接失败');
-      toast('服务器返回错误 ' + resp.status);
-    }
-  } catch(e) {
-    setStatus('error', '连接失败');
-    toast('无法连接：' + e.message);
-  }
+      renderWfBar(workflows); setStatus('ready', '已连接'); toast('连接成功，工作流已同步 ✓');
+    } else { setStatus('error', '连接失败'); toast('服务器返回错误 ' + resp.status); }
+  } catch(e) { setStatus('error', '连接失败'); toast('无法连接：' + e.message); }
 }
 
 if('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(()=>{});
