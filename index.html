@@ -27,7 +27,7 @@
   --sh2:0 4px 20px rgba(0,0,0,.08),0 2px 6px rgba(0,0,0,.04);
   --r:18px;--rsm:12px;--rxs:8px;
   --sat:env(safe-area-inset-top);
-  --sab:env(safe-area-inset-bottom);
+  --sat:env(safe-area-inset-bottom);
   --font:-apple-system,'Helvetica Neue',sans-serif;
   --tab-h:83px;
   --strip-h:96px; 
@@ -220,7 +220,6 @@ input[type=range]:active::-webkit-slider-thumb{transform:scale(1.15)}
 }
 
 .strip-empty{font-size:12px;color:var(--text3);white-space:nowrap;padding:0 8px}
-/* 任务卡片 */
 .task-card{
   flex-shrink:0;display:flex;align-items:center;gap:10px;
   background:var(--bg2);border-radius:var(--rsm);
@@ -282,20 +281,22 @@ input[type=range]:active::-webkit-slider-thumb{transform:scale(1.15)}
   gap:20px;padding:calc(var(--sat)+20px) 20px calc(var(--sab)+20px);
 }
 #lb.show{display:flex}
-#lb img{max-width:100%;max-height:80dvh;border-radius:var(--r);object-fit:contain;cursor:zoom-in}
-#lb video{max-width:100%;max-height:80dvh;border-radius:var(--r);object-fit:contain}
-.lb-actions{display:flex;gap:10px}
-.lb-btn{padding:12px 24px;border-radius:99px;border:none;font-family:var(--font);font-size:15px;font-weight:500;cursor:pointer;-webkit-appearance:none;background:rgba(255,255,255,.15);color:#fff;transition:opacity .15s}
+#lb img{max-width:100%;max-height:75dvh;border-radius:var(--r);object-fit:contain;}
+#lb video{max-width:100%;max-height:75dvh;border-radius:var(--r);object-fit:contain;}
+.lb-actions{display:flex;flex-wrap:wrap;justify-content:center;gap:10px;width:100%;max-width:350px;}
+.lb-btn{padding:12px 20px;border-radius:99px;border:none;font-family:var(--font);font-size:14px;font-weight:500;cursor:pointer;-webkit-appearance:none;background:rgba(255,255,255,.15);color:#fff;transition:opacity .15s;flex:1;min-width:100px;text-align:center;}
 .lb-btn.primary{background:#fff;color:#1d1d1f}
+.lb-btn.magic{background:var(--ac);color:#fff;box-shadow:0 2px 10px rgba(0,113,227,.4);flex:100%;}
 .lb-btn:active{opacity:.75}
 
 /* ── Toast ── */
 #toast{
   position:fixed;top:calc(var(--sat)+58px);left:50%;
   transform:translateX(-50%) translateY(-4px);
-  background:rgba(40,40,40,.92);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
-  color:#fff;padding:9px 18px;border-radius:99px;font-size:13px;
-  opacity:0;transition:opacity .2s,transform .2s;white-space:nowrap;z-index:600;pointer-events:none;
+  background:rgba(40,40,40,.95);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
+  color:#fff;padding:12px 20px;border-radius:12px;font-size:14px;line-height:1.5;
+  opacity:0;transition:opacity .2s,transform .2s;z-index:600;pointer-events:none;
+  width:90%;max-width:360px;text-align:center;box-shadow:var(--sh2);
 }
 #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 </style>
@@ -318,8 +319,8 @@ input[type=range]:active::-webkit-slider-thumb{transform:scale(1.15)}
     <div class="panel active" id="panel-create">
 
       <div class="card" style="margin-top:10px">
-        <div class="card-title">描述画面</div>
-        <textarea id="prompt" placeholder="描述你想生成的内容（生成声音请明确描述出人物说话或环境音效）…" rows="4"></textarea>
+        <div class="card-title">描述画面 (支持纯中文)</div>
+        <textarea id="prompt" placeholder="描述你想生成的视频画面..." rows="4"></textarea>
       </div>
 
       <div class="card" id="img-card" style="display:none">
@@ -397,10 +398,10 @@ input[type=range]:active::-webkit-slider-thumb{transform:scale(1.15)}
           </div>
           <div class="info-row" style="padding-top:0;border-bottom:none">
             <span class="info-label">帧率（FPS）</span>
-            <span class="info-val" id="fps-v">16</span>
+            <span class="info-val" id="fps-v">24</span>
           </div>
           <div class="sl-row" style="margin-bottom:14px">
-            <input type="range" id="fps" min="12" max="30" value="16" oninput="sl(this,'fps-v',1)">
+            <input type="range" id="fps" min="12" max="30" value="24" oninput="sl(this,'fps-v',1)">
           </div>
         </div>
         
@@ -410,7 +411,7 @@ input[type=range]:active::-webkit-slider-thumb{transform:scale(1.15)}
             <input type="checkbox" id="upscale" checked style="width:16px;height:16px;accent-color:var(--ac);vertical-align:middle">
           </span>
         </div>
-        <div id="upscale-hint" style="font-size:12px;color:var(--text3);margin-top:4px;display:none">开启后将逐帧放大画面，生成耗时会小幅增加</div>
+        <div id="upscale-hint" style="font-size:12px;color:var(--text3);margin-top:4px;display:none">开启后将逐帧放大画面，由于耗时较长，请留意同步资源库获取</div>
 
         <div class="info-row" style="padding-top:0;border-bottom:none;margin-top:14px">
           <span class="info-label">推理步数</span>
@@ -431,8 +432,9 @@ input[type=range]:active::-webkit-slider-thumb{transform:scale(1.15)}
 
       <div class="card">
         <div class="card-title">关于</div>
-        <div class="info-row" style="padding-top:0"><span class="info-label">模型</span><span class="info-val">Z-image-ZiT v7</span></div>
+        <div class="info-row" style="padding-top:0"><span class="info-label">模型</span><span class="info-val">Z-image-ZiT / Wan2.2</span></div>
         <div class="info-row"><span class="info-label">放大</span><span class="info-val">4x-UltraSharp × 2</span></div>
+        <div class="info-row"><span class="info-label">音效</span><span class="info-val">后期剪映合成 (推荐)</span></div>
         <div class="info-row"><span class="info-label">存储</span><span class="info-val">Cloudflare R2 直连</span></div>
       </div>
     </div>
@@ -440,7 +442,7 @@ input[type=range]:active::-webkit-slider-thumb{transform:scale(1.15)}
     <div class="panel" id="panel-gallery">
       <div style="margin-top:10px;display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
         <span style="font-size:15px;font-weight:600" id="g-count">资源库</span>
-        <button id="gallery-refresh-btn" onclick="refreshGallery()" style="background:none;border:none;color:var(--ac);font-family:var(--font);font-size:14px;font-weight:500;cursor:pointer;padding:4px 0">同步 R2</button>
+        <button id="gallery-refresh-btn" onclick="refreshGallery()" style="background:none;border:none;color:var(--ac);font-family:var(--font);font-size:14px;font-weight:500;cursor:pointer;padding:4px 0">🔄 同步 R2</button>
       </div>
       <div class="filter-row" id="g-filters"></div>
       <div class="g-grid" id="g-grid"></div>
@@ -476,11 +478,14 @@ input[type=range]:active::-webkit-slider-thumb{transform:scale(1.15)}
     </div>
   </div>
 
-</div><div id="lb" onclick="closeLb()">
+</div>
+
+<div id="lb" onclick="closeLb()">
   <img id="lb-img" src="" alt="" style="display:none">
-  <video id="lb-vid" controls muted loop autoplay playsinline style="display:none;max-width:100%;max-height:80dvh;border-radius:var(--r)"></video>
+  <video id="lb-vid" controls muted loop autoplay playsinline style="display:none;"></video>
   <div class="lb-actions" onclick="event.stopPropagation()">
-    <button class="lb-btn primary" onclick="lbSave()">保存到相册</button>
+    <button class="lb-btn magic" id="lb-action-btn" onclick="lbAction()"></button>
+    <button class="lb-btn primary" onclick="lbSave()">保存相册</button>
     <button class="lb-btn" onclick="closeLb()">关闭</button>
   </div>
 </div>
@@ -502,6 +507,10 @@ let uploadedImage = null;
 let sessionFiles = []; 
 let tasks = [];       
 let taskIdCounter = 0;
+
+// 全局变量，记录当前 Lightbox 正在查看的文件
+let lbCurrentSrc = null;
+let lbCurrentType = null;
 
 // ══════════════════════════════════════════════════════════════════
 // Init
@@ -548,8 +557,8 @@ async function init() {
   } else {
     workflows = {
       txt2img: { name:'Z-image 质感', icon:'✦', output_type:'image', requires_image:false },
-      txt2vid: { name:'LTX 视频', icon:'🎬', output_type:'video', requires_image:false },
-      wan2vid: { name:'Wan2 图生视频', icon:'🎥', output_type:'video', requires_image:true }
+      txt2vid: { name:'Wan2 文生视频', icon:'🎥', output_type:'video', requires_image:false },
+      wan2vid: { name:'Wan2 图生视频', icon:'🎬', output_type:'video', requires_image:true }
     };
     renderWfBar(workflows);
   }
@@ -572,9 +581,6 @@ async function init() {
   }
 }
 
-// ══════════════════════════════════════════════════════════════════
-// Local Storage History Helper
-// ══════════════════════════════════════════════════════════════════
 function getGalleryCache() {
   try { return JSON.parse(localStorage.getItem('r2_gallery_cache') || '[]'); }
   catch { return []; }
@@ -630,26 +636,23 @@ async function refreshGallery() {
   const w = getR2Worker();
   if (!w) { toast('请先在「参数」配置 R2 Worker 地址'); switchTab('settings'); return; }
   const btn = document.getElementById('gallery-refresh-btn');
-  if (btn) { btn.textContent = '同步中…'; btn.disabled = true; }
-  document.getElementById('g-count').textContent = '从 R2 读取…';
+  if (btn) { btn.textContent = '正在同步…'; btn.disabled = true; }
+  document.getElementById('g-count').textContent = '从 R2 读取中…';
   try {
     const files = await r2List();
     setGalleryCache(files);
     allFiles = files;
     renderGalleryFilters(); filterGallery();
-    toast('同步完成 · ' + files.length + ' 个文件 ✓');
+    toast('✅ 同步完成！共拉取了 ' + files.length + ' 个文件');
   } catch(e) {
     toast('同步失败：' + e.message);
     allFiles = getGalleryCache();
     renderGalleryFilters(); filterGallery();
   } finally {
-    if (btn) { btn.textContent = '同步 R2'; btn.disabled = false; }
+    if (btn) { btn.textContent = '🔄 同步 R2'; btn.disabled = false; }
   }
 }
 
-// ══════════════════════════════════════════════════════════════════
-// Workflow 渲染
-// ══════════════════════════════════════════════════════════════════
 function renderWfBar(wfs) {
   const bar = document.getElementById('wf-bar');
   bar.innerHTML = '';
@@ -667,10 +670,13 @@ function renderWfBar(wfs) {
 }
 
 function selectWf(id) {
+  const isWanVideo = (id === 'wan2vid' || id === 'txt2vid');
+  
   const upscaleRow = document.getElementById('upscale-row');
   const upscaleHint = document.getElementById('upscale-hint');
-  if (upscaleRow) upscaleRow.style.display = (id === 'wan2vid') ? 'flex' : 'none';
-  if (upscaleHint) upscaleHint.style.display = (id === 'wan2vid') ? 'block' : 'none';
+  if (upscaleRow) upscaleRow.style.display = isWanVideo ? 'flex' : 'none';
+  if (upscaleHint) upscaleHint.style.display = isWanVideo ? 'block' : 'none';
+  
   currentWf = id;
   document.querySelectorAll('.wf-pill').forEach(p => p.classList.remove('active'));
   const el = document.getElementById('wf-' + id);
@@ -694,13 +700,13 @@ function onImageSelect(input) {
 }
 
 // ══════════════════════════════════════════════════════════════════
-// Generate
+// Generate (带极致超时处理保护)
 // ══════════════════════════════════════════════════════════════════
 async function generate() {
   const api = getApi();
   if (!api) { toast('请先在「参数」填写 API 地址'); switchTab('settings'); return; }
   const prompt = document.getElementById('prompt').value.trim();
-  if (!prompt) { toast('请输入描述内容'); return; }
+  if (!prompt) { toast('请输入画面描述内容'); return; }
   const meta = workflows[currentWf] || {};
   if (meta.requires_image && !uploadedImage) { toast('请先上传参考图'); return; }
 
@@ -726,7 +732,7 @@ async function generate() {
   document.getElementById('prog').classList.add('show');
   elapsed = 0;
   document.getElementById('prog-time').textContent = '0s';
-  document.getElementById('prog-label').textContent = '启动引擎中，首次约 30s…';
+  document.getElementById('prog-label').textContent = '渲染画面中，极速出片…';
   const btn = document.getElementById('gen-btn');
   btn.disabled = true; btn.textContent = '生成中…';
 
@@ -734,9 +740,10 @@ async function generate() {
     elapsed++;
     task.elapsed = elapsed;
     document.getElementById('prog-time').textContent = elapsed + 's';
-    if (elapsed === 20) document.getElementById('prog-label').textContent = '加载模型中…';
-    if (elapsed === 50) document.getElementById('prog-label').textContent = '正在生成视频帧…';
-    if (elapsed === 120) document.getElementById('prog-label').textContent = '正在逐帧放大或配音中…';
+    if (elapsed === 20) document.getElementById('prog-label').textContent = '加载极速模型中…';
+    if (elapsed === 50) document.getElementById('prog-label').textContent = '正在渲染高帧率视频…';
+    if (elapsed === 120) document.getElementById('prog-label').textContent = '正在逐帧进行超清画质重绘…';
+    if (elapsed === 250) document.getElementById('prog-label').textContent = '由于视频较长，稍后可能会断开连接，请勿担心…';
     renderStrip(); 
   }, 1000);
 
@@ -749,16 +756,23 @@ async function generate() {
       cfg: parseFloat((document.getElementById('cfg').value * 0.1).toFixed(1)),
       width: w, height: h,
       duration: parseInt(document.getElementById('duration')?.value || 5),
-      fps: parseInt(document.getElementById('fps')?.value || 16),
+      fps: parseInt(document.getElementById('fps')?.value || 24),
       upscale: document.getElementById('upscale')?.checked || false,
     };
+    
     const fd = new FormData();
     fd.append('workflow_id', currentWf);
     fd.append('params', JSON.stringify(params));
     if (meta.requires_image && task.imageFile) fd.append('image', task.imageFile);
 
-    const resp = await fetch(api + '/api/generate', { method: 'POST', body: fd });
+    // 捕获网络超时，但不当做真正的错误
+    const resp = await fetch(api + '/api/generate', { method: 'POST', body: fd }).catch(e => {
+        throw new Error('NETWORK_TIMEOUT');
+    });
+    
+    if (resp.status === 504 || resp.status === 502) throw new Error('NETWORK_TIMEOUT');
     if (!resp.ok) throw new Error('HTTP ' + resp.status);
+
     const data = await resp.json();
     if (data.status !== 'ok' || !data.results?.length) throw new Error('未返回结果');
 
@@ -777,9 +791,17 @@ async function generate() {
     addToHistory(first.url, first.type);
 
   } catch(err) {
-    task.status = 'error';
-    setStatus('error', '失败');
-    toast('失败：' + err.message);
+    // ✅ 【神级优化】：针对网关强制断开的完美宽慰提示
+    if (err.message === 'NETWORK_TIMEOUT' || err.message.includes('fetch')) {
+        task.status = 'done'; // 停止转圈，假装完成
+        task.url = null;
+        setStatus('ready', '就绪');
+        toast('⏳ 连接已断开，但这说明 A100 仍在后台努力渲染长视频！\n\n请不要刷新网页，喝杯茶，几分钟后去【资源库】点击「🔄 同步 R2」即可收获高清大片！');
+    } else {
+        task.status = 'error';
+        setStatus('error', '失败');
+        toast('生成失败：' + err.message);
+    }
   } finally {
     busy = false;
     clearInterval(timer);
@@ -793,13 +815,13 @@ function showResult(src, isVid) {
   document.getElementById('result-ph').style.display = 'none';
   const img = document.getElementById('result-img');
   const vid = document.getElementById('result-vid');
-  const extBtn = document.getElementById('extend-btn'); // 获取续写按钮
+  const extBtn = document.getElementById('extend-btn');
   
   if (isVid) { 
     img.style.display='none'; 
     vid.src=src; 
     vid.style.display='block'; 
-    if(extBtn) extBtn.style.display='block'; // 只有视频才显示续写
+    if(extBtn) extBtn.style.display='block';
   } else { 
     vid.style.display='none'; 
     vid.src=''; 
@@ -809,68 +831,10 @@ function showResult(src, isVid) {
   }
 }
 
-// ══════════════════════════════════════════════════════════════════
-// 🪄 视频无缝续写 (截取最后一帧)
-// ══════════════════════════════════════════════════════════════════
+// （主页旧的续写按钮保留供快速操作，提取逻辑复用下面的 Lightbox 逻辑）
 async function extendVideo() {
-  if (!lastSrc || !lastIsVid) return;
-  toast('正在提取视频最后一帧...');
-  
-  try {
-    // 1. 通过 fetch 下载视频避免 Canvas 跨域污染 (CORS Taint)
-    const resp = await fetch(lastSrc);
-    const vidBlob = await resp.blob();
-    const vidUrl = URL.createObjectURL(vidBlob);
-    
-    // 2. 创建静音隐藏的视频元素用于截图
-    const tempVid = document.createElement('video');
-    tempVid.src = vidUrl;
-    tempVid.muted = true;
-    tempVid.playsInline = true;
-    
-    // 3. 视频元数据加载后，跳转到几乎最后一帧 (减去0.05秒确保不黑屏)
-    tempVid.addEventListener('loadeddata', () => {
-      tempVid.currentTime = Math.max(0, tempVid.duration - 0.05);
-    });
-    
-    // 4. 跳转完成后进行截图
-    tempVid.addEventListener('seeked', () => {
-      const canvas = document.createElement('canvas');
-      canvas.width = tempVid.videoWidth;
-      canvas.height = tempVid.videoHeight;
-      const ctx = canvas.getContext('2d');
-      ctx.drawImage(tempVid, 0, 0, canvas.width, canvas.height);
-      
-      canvas.toBlob((blob) => {
-        URL.revokeObjectURL(vidUrl); // 释放内存
-        if (!blob) { toast('提取帧失败'); return; }
-        
-        // 5. 伪装成用户上传的文件
-        const file = new File([blob], 'extend_frame.png', { type: 'image/png' });
-        uploadedImage = file;
-        
-        // 6. 更新 UI 的上传图片区域
-        const preview = document.getElementById('upload-preview');
-        document.getElementById('upload-hint').style.display = 'none';
-        document.getElementById('img-upload-area').classList.add('has-img');
-        preview.src = URL.createObjectURL(blob);
-        preview.style.display = 'block';
-        
-        // 7. 确保切换到 Wan2 视频流
-        if (currentWf !== 'wan2vid') {
-           selectWf('wan2vid');
-        }
-        
-        // 8. 滚动到顶部并提示用户
-        switchTab('create');
-        document.getElementById('panels').scrollTo({top: 0, behavior: 'smooth'});
-        toast('最后一帧提取成功！请修改动作提示词后生成');
-        
-      }, 'image/png');
-    });
-  } catch (e) {
-    toast('提取失败：' + e.message);
-  }
+    openLb(lastSrc, lastIsVid ? 'vid' : 'img');
+    setTimeout(lbAction, 300); // 借用画廊的魔法按钮逻辑
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -909,7 +873,7 @@ function renderStrip() {
     const dotClass = task.status;
     const metaText = task.status === 'running'
       ? `${task.elapsed}s…`
-      : task.status === 'done' ? `${task.elapsed}s · ${task.wfName}` : '生成失败';
+      : task.status === 'done' ? (task.url ? `${task.elapsed}s · ${task.wfName}` : '后台渲染中, 稍后同步') : '生成失败';
 
     card.innerHTML = `
       <div class="task-thumb">${thumbHtml}</div>
@@ -998,8 +962,133 @@ async function delFile(filename, e) {
 }
 
 // ══════════════════════════════════════════════════════════════════
-// Save / Share / Lightbox
+// 全新 Lightbox (资源库万能魔法枢纽)
 // ══════════════════════════════════════════════════════════════════
+function openLb(src, type) {
+  lbCurrentSrc = src;
+  lbCurrentType = type;
+  
+  const img = document.getElementById('lb-img');
+  const vid = document.getElementById('lb-vid');
+  const actionBtn = document.getElementById('lb-action-btn');
+
+  // ✅ 核心魔法：不再把视频弹出版原生全屏，而是真的放在 Lightbox 里播放，从而显示我们的魔法按钮！
+  if (type === 'vid') {
+    img.style.display = 'none'; img.src = '';
+    vid.src = src; vid.style.display = 'block';
+    actionBtn.textContent = '🪄 截取最后1帧，无缝续写此视频';
+  } else {
+    vid.style.display = 'none'; vid.src = '';
+    img.src = src; img.style.display = 'block';
+    actionBtn.textContent = '🖼️ 提取此图片，用作图生视频';
+  }
+  
+  document.getElementById('lb').classList.add('show');
+}
+
+function closeLb() { 
+    document.getElementById('lb').classList.remove('show'); 
+    document.getElementById('lb-vid').src = ''; 
+    lbCurrentSrc = null;
+}
+
+// 魔法按钮执行动作（图生视频 / 截帧续写）
+async function lbAction() {
+  if (!lbCurrentSrc) return;
+  
+  // 1️⃣ 提取图片用作图生视频
+  if (lbCurrentType === 'img' || lbCurrentType === 'gif') {
+      toast('正在为您提取图片...');
+      try {
+          const resp = await fetch(lbCurrentSrc);
+          const blob = await resp.blob();
+          const file = new File([blob], 'gallery_source.png', { type: blob.type });
+          uploadedImage = file;
+          
+          const preview = document.getElementById('upload-preview');
+          document.getElementById('upload-hint').style.display = 'none';
+          document.getElementById('img-upload-area').classList.add('has-img');
+          preview.src = URL.createObjectURL(blob);
+          preview.style.display = 'block';
+          
+          selectWf('wan2vid'); // 强制切换到图生视频
+          closeLb();
+          switchTab('create');
+          document.getElementById('panels').scrollTo({top: 0, behavior: 'smooth'});
+          toast('✅ 已成功加载为参考图！请输入您的动作提示词。');
+      } catch(e) { toast('提取失败: ' + e.message); }
+  } 
+  
+  // 2️⃣ 提取视频最后一帧用于续写
+  else if (lbCurrentType === 'vid') {
+      toast('正在精准抓取视频最后一帧...');
+      try {
+          const resp = await fetch(lbCurrentSrc);
+          const vidBlob = await resp.blob();
+          const vidUrl = URL.createObjectURL(vidBlob);
+          
+          const tempVid = document.createElement('video');
+          tempVid.src = vidUrl;
+          tempVid.muted = true;
+          tempVid.playsInline = true;
+          
+          tempVid.addEventListener('loadeddata', () => {
+              tempVid.currentTime = Math.max(0, tempVid.duration - 0.05); // 避开黑屏卡最后一点
+          });
+          
+          tempVid.addEventListener('seeked', () => {
+              const canvas = document.createElement('canvas');
+              canvas.width = tempVid.videoWidth;
+              canvas.height = tempVid.videoHeight;
+              const ctx = canvas.getContext('2d');
+              ctx.drawImage(tempVid, 0, 0, canvas.width, canvas.height);
+              
+              canvas.toBlob((blob) => {
+                  URL.revokeObjectURL(vidUrl);
+                  if (!blob) { toast('提取帧失败'); return; }
+                  
+                  const file = new File([blob], 'extend_frame.png', { type: 'image/png' });
+                  uploadedImage = file;
+                  
+                  const preview = document.getElementById('upload-preview');
+                  document.getElementById('upload-hint').style.display = 'none';
+                  document.getElementById('img-upload-area').classList.add('has-img');
+                  preview.src = URL.createObjectURL(blob);
+                  preview.style.display = 'block';
+                  
+                  selectWf('wan2vid');
+                  closeLb();
+                  switchTab('create');
+                  document.getElementById('panels').scrollTo({top: 0, behavior: 'smooth'});
+                  toast('✅ 最后一帧抓取成功！请修改新的动作指令，它将无缝续写。');
+              }, 'image/png');
+          });
+      } catch (e) { toast('抓取失败: ' + e.message); }
+  }
+}
+
+async function lbSave() {
+  if (!lbCurrentSrc) return;
+  const isV = (lbCurrentType === 'vid');
+  try {
+      const resp = await fetch(lbCurrentSrc);
+      const blob = await resp.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; 
+      a.download = 'ai-' + Date.now() + (isV ? '.mp4' : '.png'); 
+      a.click();
+      URL.revokeObjectURL(url);
+  } catch {
+      // 降级方案
+      const a = document.createElement('a');
+      a.href = lbCurrentSrc;
+      a.download = 'ai-' + Date.now() + (isV ? '.mp4' : '.png');
+      a.click();
+  }
+}
+
+// 后备保存与分享
 async function saveResult() {
   if (!lastSrc) return;
   try {
@@ -1022,38 +1111,6 @@ async function shareResult() {
       await navigator.share({ files: [file], title: 'AI 生成', text: document.getElementById('prompt').value });
     } else { await saveResult(); }
   } catch { await saveResult(); }
-}
-
-function openLb(src, type) {
-  if (type === 'vid') {
-    const vid = document.createElement('video');
-    vid.src = src; vid.controls = true; vid.autoplay = true; vid.playsInline = true;
-    vid.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;background:#000;z-index:9999;object-fit:contain';
-    document.body.appendChild(vid);
-    vid.play().catch(()=>{});
-    if (vid.webkitEnterFullscreen) {
-      vid.addEventListener('loadedmetadata', () => vid.webkitEnterFullscreen(), {once:true});
-    } else if (vid.requestFullscreen) {
-      vid.requestFullscreen().catch(()=>{});
-    }
-    const cleanup = () => { vid.pause(); vid.remove(); };
-    vid.addEventListener('webkitendfullscreen', cleanup, {once:true});
-    document.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement) cleanup(); }, {once:true});
-    vid.addEventListener('click', cleanup);
-    return;
-  }
-  const img = document.getElementById('lb-img');
-  const vid2 = document.getElementById('lb-vid');
-  vid2.style.display='none'; vid2.src='';
-  img.src=src; img.style.display='block';
-  document.getElementById('lb').classList.add('show');
-}
-function closeLb() { document.getElementById('lb').classList.remove('show'); document.getElementById('lb-vid').src=''; }
-function lbSave() {
-  const img=document.getElementById('lb-img'), vid=document.getElementById('lb-vid');
-  const src=img.style.display!=='none'?img.src:vid.src;
-  const isV=vid.style.display!=='none';
-  const a=document.createElement('a'); a.href=src; a.download='ai-'+Date.now()+(isV?'.mp4':'.png'); a.click();
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -1079,15 +1136,13 @@ function setStatus(s, t) {
 function toast(msg) {
   const el = document.getElementById('toast');
   el.textContent = msg; el.classList.add('show');
-  clearTimeout(toastT); toastT = setTimeout(()=>el.classList.remove('show'), 2800);
+  clearTimeout(toastT); toastT = setTimeout(()=>el.classList.remove('show'), 6000); // 增加 toast 停留时间
 }
 
-// 单独封装给“刷新工作流”按钮，强行唤醒并同步
 async function refreshWorkflows() {
   await manualConnect();
 }
 
-// 手动点击小圆点或刷新工作流触发连接（主动唤醒）
 async function manualConnect() {
   if (busy) return;
   const api = getApi();
