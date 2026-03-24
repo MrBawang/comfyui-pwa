@@ -1005,7 +1005,7 @@ async function enhancePrompt() {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
                 body: JSON.stringify({
-                    model: "Qwen/Qwen2.5-7B-Instruct", // 需与 Modal 部署名一致
+                    model: "Llama-3-Abliterated", // 需与 Modal 部署名一致
                     messages: [
                         { role: 'system', content: '你是一个顶级的 AI 生图 Prompt 工程师。将中文描述扩写为细节极其丰富的英文，只输出纯英文 Prompt，不含中文。' },
                         { role: 'user', content: originalText }
