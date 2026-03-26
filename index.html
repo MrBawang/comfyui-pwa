@@ -1036,7 +1036,8 @@ CRITICAL RULES:
             btn.textContent = attempt === 0 ? '⏳ 提取视觉标签中...' : `⏳ 重试中 (${attempt + 1}/${maxRetries})...`;
             
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 60000); 
+            // 🚨 修复：将超时延长至 180s，包容首次冷启动的 100s 耗时
+			const timeoutId = setTimeout(() => controller.abort(), 180000);
 
             const payload = {
                 model: "Dolphin-Qwen", 
