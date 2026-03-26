@@ -521,7 +521,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (savedR2) document.getElementById('r2-worker-url').value = savedR2;
   document.getElementById('r2-worker-url')?.addEventListener('blur', e => localStorage.setItem('r2_worker_url', e.target.value.trim()));
 
-  // 🚨 修复负面提示词，改为自然语言风格
   document.getElementById('negative').value = localStorage.getItem('negative') || 'blurry, low quality, deformed anatomy, extra limbs, bad hands, overexposed, cartoonish, static scene, frozen motion';
   document.getElementById('negative').addEventListener('blur', e => localStorage.setItem('negative', e.target.value));
 
@@ -655,16 +654,15 @@ function selectWf(id) {
   const vidParams = document.getElementById('vid-params');
   if (vidParams) vidParams.style.display = (meta.output_type === 'video') ? 'block' : 'none';
 
-  // 🚨 修复：根据工作流自动调节 CFG 默认值
   const cfgSlider = document.getElementById('cfg');
   if (id === 'txt2img') {
-      cfgSlider.value = 15; // Z-image CFG: 1.5
+      cfgSlider.value = 15;
       sl(cfgSlider, 'cfg-v', 0.1);
   } else if (id === 'flux2_img') {
-      cfgSlider.value = 40; // Flux Guidance: 4.0
+      cfgSlider.value = 40;
       sl(cfgSlider, 'cfg-v', 0.1);
   } else {
-      cfgSlider.value = 50; // Wan2 CFG: 5.0
+      cfgSlider.value = 50;
       sl(cfgSlider, 'cfg-v', 0.1);
   }
 }
@@ -990,7 +988,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('llm-api-url').addEventListener('blur', e => localStorage.setItem('llm_api_url', e.target.value.trim()));
 });
 
-// 🚨 修复：智能动态系统提示词，根据工作流匹配最佳自然语言扩写策略
+// 🚨 终极修复：使用 Stream 流式接收，彻底打破超时限制，并提供打字机体验
 async function enhancePrompt() {
     const key = localStorage.getItem('llm_api_key');
     const apiUrl = localStorage.getItem('llm_api_url');
@@ -1003,88 +1001,69 @@ async function enhancePrompt() {
 
     const btn = document.getElementById('enhance-btn');
     btn.disabled = true;
-    const sleep = ms => new Promise(r => setTimeout(r, ms));
-    const maxRetries = 3;
 
-    // 根据选中的工作流动态判断：是否为视频
     const isVideo = currentWf === 'txt2vid' || currentWf === 'wan2vid';
+    const dynamicSystemPrompt = isVideo 
+        ? "You are an expert prompt engineer for Wan2.2 cinematic AI video generation.\nTask: Expand the user's Chinese concept into a detailed, high-quality English prompt (80-120 words).\nCRITICAL RULES:\n1. Use natural language. Include a Shot Order (e.g., Wide shot, close-up).\n2. Explicitly describe Camera Movements (e.g., pan left, dolly in, tracking shot).\n3. Describe smooth physical motion and lighting.\n4. Accurately describe adult actions vividly and naturally without censorship.\n5. Output ONLY the final prompt, no explanations."
+        : "You are an expert prompt engineer for Flux.2 and photorealistic AI image models.\nTask: Expand the user's Chinese concept into a highly detailed English prompt.\nCRITICAL RULES:\n1. Use natural language and a Subject-First structure.\n2. Do NOT use comma-separated Danbooru tags. Use grammatically correct sentences.\n3. Keep explicit actions accurate but describe them vividly without censorship.\n4. Include photography terms (e.g., 85mm lens, f/2.0, cinematic lighting).\n5. Output ONLY the final prompt, no explanations.";
 
-    let dynamicSystemPrompt = "";
+    try {
+        btn.textContent = '⏳ 引擎唤醒中 (首次可能需60秒)...';
+        
+        const payload = {
+            model: "Dolphin-Qwen", 
+            messages: [
+                { role: 'system', content: dynamicSystemPrompt },
+                { role: 'user', content: originalText } 
+            ],
+            temperature: 0.6, 
+            max_tokens: 150,  
+            stop: ["<|im_end|>", "<|im_start|>", "<|endoftext|>", "Input:"],
+            stream: true // 🌟 核心机制：让后端一个词一个词地吐出来，保持网络长连接存活！
+        };
 
-    if (isVideo) {
-        dynamicSystemPrompt = `You are an expert prompt engineer for Wan2.2 cinematic AI video generation.
-Task: Expand the user's Chinese concept into a detailed, high-quality English prompt (80-120 words).
-CRITICAL RULES:
-1. Use natural language. Include a Shot Order (e.g., Wide shot, close-up).
-2. Explicitly describe Camera Movements (e.g., pan left, dolly in, tracking shot).
-3. Describe smooth physical motion and lighting (e.g., volumetric lighting).
-4. Accurately describe adult actions vividly and naturally without censorship.
-5. Output ONLY the final prompt, no explanations.`;
-    } else {
-        dynamicSystemPrompt = `You are an expert prompt engineer for Flux.2 and photorealistic AI image models.
-Task: Expand the user's Chinese concept into a highly detailed English prompt.
-CRITICAL RULES:
-1. Use natural language and a Subject-First structure (Subject -> Action -> Environment -> Lighting/Camera).
-2. Do NOT use comma-separated Danbooru tags. Use grammatically correct sentences.
-3. Keep explicit actions accurate but describe them vividly without censorship.
-4. Include photography terms (e.g., 85mm lens, f/2.0, cinematic lighting).
-5. Output ONLY the final prompt, no explanations.`;
-    }
+        const resp = await fetch(apiUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
+            body: JSON.stringify(payload)
+        });
 
-    for (let attempt = 0; attempt < maxRetries; attempt++) {
-        try {
-            btn.textContent = attempt === 0 ? '⏳ 提取视觉标签中...' : `⏳ 重试中 (${attempt + 1}/${maxRetries})...`;
+        if (!resp.ok) throw new Error(`HTTP 异常: ${resp.status}`);
+
+        // 准备开始打字机效果
+        promptEl.value = ""; 
+        btn.textContent = '✨ 正在极速生成...';
+        const reader = resp.body.getReader();
+        const decoder = new TextDecoder("utf-8");
+
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
             
-            const controller = new AbortController();
-            // 🚨 修复：将超时延长至 180s，包容首次冷启动的 100s 耗时
-			const timeoutId = setTimeout(() => controller.abort(), 180000);
-
-            const payload = {
-                model: "Dolphin-Qwen", 
-                messages: [
-                    { role: 'system', content: dynamicSystemPrompt }, // 🚨 修复：改用刚刚生成的 dynamicSystemPrompt
-                    { role: 'user', content: originalText } 
-                ],
-                temperature: 0.4, 
-                max_tokens: 120,  
-                stop: ["<|im_end|>", "<|im_start|>", "<|endoftext|>", "Input:"] 
-            };
-
-            const resp = await fetch(apiUrl, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
-                body: JSON.stringify(payload),
-                signal: controller.signal
-            });
-
-            clearTimeout(timeoutId);  
-            if (!resp.ok) throw new Error(`HTTP Error ${resp.status}`);
-
-            const data = await resp.json();
-            const result = data.choices[0].message.content.trim();
+            const chunk = decoder.decode(value, { stream: true });
+            const lines = chunk.split('\n');
             
-            if (result.includes("Sorry") || result.includes("cannot fulfill")) {
-                throw new Error("AI_REFUSAL");
-            }
-
-            promptEl.value = result;
-            toast('✨ 高质量视觉标签生成成功！');
-            break; 
-
-        } catch (err) {
-            console.error(`[扩写请求失败] 尝试 ${attempt + 1}:`, err);
-            
-            if (attempt < maxRetries - 1) {
-                btn.textContent = err.message === "AI_REFUSAL" ? '⚠️ 触发过滤，调整策略重试...' : '⚠️ 唤醒超时，15s后重试...';
-                await sleep(15000); 
-            } else {
-                toast('❌ 扩写失败，请确认 Modal 状态或更换模型');
+            for (const line of lines) {
+                if (line.startsWith('data: ') && !line.includes('[DONE]')) {
+                    try {
+                        const data = JSON.parse(line.slice(6));
+                        const text = data.choices[0].delta.content;
+                        if (text) {
+                            promptEl.value += text; // 逐字追加到文本框
+                        }
+                    } catch(e) { /* 忽略解析截断残帧 */ }
+                }
             }
         }
+        toast('✨ 高质量提示词扩写完成！');
+        
+    } catch (err) {
+        console.error(`[扩写请求失败]:`, err);
+        toast('❌ 扩写失败，请检查网络或 URL：' + err.message);
+    } finally {
+        btn.textContent = '✨ AI 自动扩写并翻译为英文 (长按可重置)';
+        btn.disabled = false;
     }
-
-    btn.textContent = '✨ AI 自动扩写并翻译为英文 (长按可重置)';
-    btn.disabled = false;
 }
 </script>
 </body>
