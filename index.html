@@ -1040,12 +1040,15 @@ CRITICAL RULES:
 			const timeoutId = setTimeout(() => controller.abort(), 180000);
 
             const payload = {
-                model: "Dolphin-Qwen", 
+                model: "Dolphin-Qwen", // 🌟 必须与你在 Modal 部署时写的 --served-model-name 一模一样！
                 messages: [
-                    { role: 'system', content: dynamicSystemPrompt },
-                    { role: 'user', content: `Input: ${originalText}\nOutput:` } 
+                    { role: 'system', content: specializedSystemPrompt },
+                    // 🚨 修复 1：去掉人为加的 \nOutput:，防止打乱大模型底层的 ChatML 模板格式
+                    { role: 'user', content: originalText } 
                 ],
-                temperature: 0.6 // 🚨 修复：提高温度以容纳更多生动描述
+                temperature: 0.4, // 稍微调高一点点，防止它陷入低温度的机械复读
+                max_tokens: 120,  // 🚨 修复 2：强行刹车！我们只要几个Tag，120个词足够了，绝不允许生成 2048 个词
+                stop: ["<|im_end|>", "<|im_start|>", "<|endoftext|>", "Input:"] // 🚨 修复 3：设置停止词，模型一旦想胡言乱语就立刻掐断
             };
 
             const resp = await fetch(apiUrl, {
