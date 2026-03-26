@@ -521,7 +521,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (savedR2) document.getElementById('r2-worker-url').value = savedR2;
   document.getElementById('r2-worker-url')?.addEventListener('blur', e => localStorage.setItem('r2_worker_url', e.target.value.trim()));
 
-  // 🚨 修复负面提示词，改为自然语言风格
   document.getElementById('negative').value = localStorage.getItem('negative') || 'blurry, low quality, deformed anatomy, extra limbs, bad hands, overexposed, cartoonish, static scene, frozen motion';
   document.getElementById('negative').addEventListener('blur', e => localStorage.setItem('negative', e.target.value));
 
@@ -655,16 +654,15 @@ function selectWf(id) {
   const vidParams = document.getElementById('vid-params');
   if (vidParams) vidParams.style.display = (meta.output_type === 'video') ? 'block' : 'none';
 
-  // 🚨 修复：根据工作流自动调节 CFG 默认值
   const cfgSlider = document.getElementById('cfg');
   if (id === 'txt2img') {
-      cfgSlider.value = 15; // Z-image CFG: 1.5
+      cfgSlider.value = 15; 
       sl(cfgSlider, 'cfg-v', 0.1);
   } else if (id === 'flux2_img') {
-      cfgSlider.value = 40; // Flux Guidance: 4.0
+      cfgSlider.value = 40; 
       sl(cfgSlider, 'cfg-v', 0.1);
   } else {
-      cfgSlider.value = 50; // Wan2 CFG: 5.0
+      cfgSlider.value = 50; 
       sl(cfgSlider, 'cfg-v', 0.1);
   }
 }
@@ -990,11 +988,11 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('llm-api-url').addEventListener('blur', e => localStorage.setItem('llm_api_url', e.target.value.trim()));
 });
 
-// 🚨 终极修复：把任务丢给永远热启动的主网关代劳
+// 🚨 终极修复：把任务丢给永远热启动的主网关代劳，并使用缓冲区流式读取
 async function enhancePrompt() {
     const key = localStorage.getItem('llm_api_key');
     const apiUrl = localStorage.getItem('llm_api_url');
-    const gatewayUrl = getApi(); // 🌟 获取你的主网关地址
+    const gatewayUrl = getApi(); // 🌟 获取主网关地址
     
     if (!key || !apiUrl) { toast('请先在「参数」配置 LLM 的 Key 和 URL'); switchTab('settings'); return; }
     if (!gatewayUrl) { toast('请先配置主 API 地址！我们需要网关作中转'); switchTab('settings'); return; }
@@ -1026,7 +1024,6 @@ async function enhancePrompt() {
             stream: true
         };
 
-        // 打包好数据，发给我们的全天候在线网关
         const proxyData = {
             llm_url: apiUrl,
             llm_key: key,
@@ -1035,7 +1032,7 @@ async function enhancePrompt() {
 
         const resp = await fetch(gatewayUrl + '/api/enhance_proxy', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' }, // 不需要 Authorization，永远不会触发复杂 CORS
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(proxyData)
         });
 
@@ -1045,15 +1042,19 @@ async function enhancePrompt() {
         btn.textContent = '✨ 正在极速生成...';
         const reader = resp.body.getReader();
         const decoder = new TextDecoder("utf-8");
+        
+        let buffer = ""; // 🌟 缓冲区，防止数据包碎片断裂
 
         while (true) {
             const { done, value } = await reader.read();
             if (done) break;
             
-            const chunk = decoder.decode(value, { stream: true });
-            const lines = chunk.split('\n');
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
+            buffer = lines.pop(); // 保留不完整的碎片留到下一次拼装
             
-            for (const line of lines) {
+            for (let line of lines) {
+                line = line.trim();
                 if (line.startsWith('data: ') && !line.includes('[DONE]')) {
                     try {
                         const data = JSON.parse(line.slice(6));
@@ -1061,8 +1062,14 @@ async function enhancePrompt() {
                         const text = data.choices?.[0]?.delta?.content;
                         if (text) {
                             promptEl.value += text;
+                            promptEl.scrollTop = promptEl.scrollHeight; // 自动滚到底部
                         }
-                    } catch(e) { }
+                    } catch(e) { 
+                        // 遇到网关抛出的真实 HTTP 错误，中断并报错
+                        if (e.message.includes('vLLM请求失败') || e.message.includes('error')) {
+                            throw e; 
+                        }
+                    }
                 }
             }
         }
