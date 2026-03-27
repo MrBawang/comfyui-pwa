@@ -843,10 +843,11 @@ async function enhancePrompt() {
 
 const isVideo = currentWf === 'txt2vid' || currentWf === 'wan2vid';
     
-    // 🚨 加上了紧箍咒：要求绝对忠实于原意，严格禁止偏离主题的过度脑补
+    // 🚨 加上了紧箍咒：要求绝对忠实于原意，严格禁止偏离主题的过度脑补    
+    // 🚨 强制要求：ONE SINGLE PARAGRAPH (输出为连贯的单段落，禁止换行和列提纲)
     const dynamicSystemPrompt = isVideo 
-        ? "You are an expert prompt engineer for Wan2.2 cinematic AI video generation.\nTask: Accurately TRANSLATE the user's Chinese input into English, then enhance it with cinematic details (MAX 40-60 words).\nCRITICAL RULES:\n1. FAITHFULLY preserve the original subject, meaning, and action. Do NOT invent unrelated storylines or characters.\n2. Include a specific Camera Movement (e.g., pan left, dolly in).\n3. Describe smooth physical motion and lighting.\n4. Output ONLY the final prompt, no explanations."
-        : "You are an expert prompt engineer for Flux.2 photorealistic AI image models.\nTask: Accurately TRANSLATE the user's Chinese input into English, then add photographic details (MAX 30-50 words).\nCRITICAL RULES:\n1. FAITHFULLY preserve the original subject and meaning. Do NOT hallucinate or add unrelated elements.\n2. Add 2-3 specific photography terms (e.g., cinematic lighting, 85mm lens, 4k resolution).\n3. Keep it extremely concise and literal using a Subject-First structure.\n4. Output ONLY the final prompt, no explanations.";
+        ? "You are an expert prompt engineer for Wan2.2 cinematic AI video generation.\nTask: TRANSLATE the user's Chinese input into English, then enhance it with cinematic details (around 40-60 words).\nCRITICAL RULES:\n1. FAITHFULLY preserve the original subject (e.g., Yang Mi). Do NOT invent unrelated storylines.\n2. Output as ONE SINGLE CONTINUOUS PARAGRAPH. No bullet points, no line breaks, no prefixes like 'Camera Movement:'.\n3. Smoothly integrate a camera movement, physical motion, and lighting into natural sentences.\n4. Output ONLY the final prompt, no explanations."
+        : "You are an expert prompt engineer for Flux.2 photorealistic AI image models.\nTask: TRANSLATE the user's Chinese input into English, then add photographic details (around 30-50 words).\nCRITICAL RULES:\n1. FAITHFULLY preserve the original subject. Do NOT hallucinate unrelated elements.\n2. Output as ONE SINGLE CONTINUOUS PARAGRAPH. No bullet points, no line breaks.\n3. Add 2-3 specific photography terms smoothly into the sentence (e.g., cinematic lighting, 85mm lens).\n4. Output ONLY the final prompt, no explanations.";
 
     let accumulated = "";
 
@@ -857,14 +858,12 @@ const isVideo = currentWf === 'txt2vid' || currentWf === 'wan2vid';
                 { role: 'system', content: dynamicSystemPrompt },
                 { role: 'user', content: originalText }
             ],
-            // 🚨 核心降温：从 0.85 降到 0.35，让模型变得极其严谨、听话、不乱发散
-            temperature: 0.35,
-            max_tokens: 180,
+            // 适当回暖一点温度，让句子更通顺自然
+            temperature: 0.5,
+            max_tokens: 150,
             stream: true,
-            repetition_penalty: 1.05,
-            frequency_penalty: 0.1,
-            presence_penalty: 0.1,
-            stop: [".\n", "\n\n"], 
+            repetition_penalty: 1.05
+            // 🚨 删除了罪魁祸首 stop 参数，彻底解决一半截断的问题！
         };
     
         const baseUrl = apiUrl.replace(/\/$/, '');
