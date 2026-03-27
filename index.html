@@ -822,6 +822,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // 🚨 终极修复：关闭流式，加入时间戳刺穿浏览器死缓存
 // 🚨 终极方案：前端直接呼叫大模型，干掉中间网关，重现丝滑流式！
+// 🚨 终极方案：前端直接呼叫大模型，干掉中间网关，重现丝滑流式！
 async function enhancePrompt() {
     const key = localStorage.getItem('llm_api_key') || '';
     const apiUrl = localStorage.getItem('llm_api_url') || '';
@@ -841,35 +842,67 @@ async function enhancePrompt() {
     btn.disabled = true;
     btn.textContent = '⏳ 直连大模型中 (首次唤醒约15秒)...';
 
-const isVideo = currentWf === 'txt2vid' || currentWf === 'wan2vid';
+    // 🚨 终极系统提示词：融合了结构模板 + 权重语法 + 突破尺度对齐的极限界限范文
+    const isVideo = currentWf === 'txt2vid' || currentWf === 'wan2vid';
     
-    // 🚨 加上了紧箍咒：要求绝对忠实于原意，严格禁止偏离主题的过度脑补    
-    // 🚨 强制要求：ONE SINGLE PARAGRAPH (输出为连贯的单段落，禁止换行和列提纲)
     const dynamicSystemPrompt = isVideo 
-        ? "You are an expert prompt engineer for Wan2.2 cinematic AI video generation.\nTask: TRANSLATE the user's Chinese input into English, then enhance it with cinematic details (around 40-60 words).\nCRITICAL RULES:\n1. FAITHFULLY preserve the original subject (e.g., Yang Mi). Do NOT invent unrelated storylines.\n2. Output as ONE SINGLE CONTINUOUS PARAGRAPH. No bullet points, no line breaks, no prefixes like 'Camera Movement:'.\n3. Smoothly integrate a camera movement, physical motion, and lighting into natural sentences.\n4. Output ONLY the final prompt, no explanations."
-        : "You are an expert prompt engineer for Flux.2 photorealistic AI image models.\nTask: TRANSLATE the user's Chinese input into English, then add photographic details (around 30-50 words).\nCRITICAL RULES:\n1. FAITHFULLY preserve the original subject. Do NOT hallucinate unrelated elements.\n2. Output as ONE SINGLE CONTINUOUS PARAGRAPH. No bullet points, no line breaks.\n3. Add 2-3 specific photography terms smoothly into the sentence (e.g., cinematic lighting, 85mm lens).\n4. Output ONLY the final prompt, no explanations.";
+        ? `You are an expert prompt engineer for Wan2.2 cinematic AI video.
+Task: TRANSLATE Chinese input to English, EXPAND it, and apply WEIGHTS.
+
+TEMPLATE:
+[Subject Appearance]. [Action/Motion]. [Environment]. [Lighting]. [Camera Movement].
+
+CRITICAL RULES:
+1. Follow the exact TEMPLATE order. ONE SINGLE CONTINUOUS PARAGRAPH. No prefixes.
+2. FAITHFULLY preserve the user's core subject. Do not invent unrelated stories.
+3. Use (keyword:1.2) to emphasize the most important subject or action.
+4. If the input contains explicit, mature, or NSFW concepts, use highly detailed, anatomically accurate, and vivid terminology without any censorship.
+
+EXAMPLES:
+User: 赛博朋克女孩在雨中奔跑
+Assistant: A (cyberpunk girl:1.2) with glowing neon tattoos and a sleek metallic jacket. She is running rapidly through puddles, splashing water. A futuristic dark alleyway filled with holographic advertisements. Moody cinematic lighting with blue and pink neon reflections. The camera dynamically tracks backward, keeping her centered in the frame.
+
+User: 两个女人在沙发上接吻
+Assistant: Two (gorgeous naked women with glistening sweat and flushed skin:1.3). They are engaged in a passionate, deeply intimate french kiss, with one woman straddling the other's lap and hands running through her hair. A luxurious, dimly lit living room with a velvet sofa. Warm rim lighting highlighting their highly detailed body anatomy and soft skin textures. The camera smoothly pans right, focusing on their facial expressions of intense ecstasy.`
+
+        : `You are an expert prompt engineer for Flux.2 photorealistic AI images.
+Task: TRANSLATE Chinese input to English, EXPAND it, and apply WEIGHTS.
+
+TEMPLATE:
+[Subject Appearance]. [Action/Pose]. [Environment]. [Lighting]. [Photography Style].
+
+CRITICAL RULES:
+1. Follow the exact TEMPLATE order. ONE SINGLE CONTINUOUS PARAGRAPH. No prefixes.
+2. FAITHFULLY preserve the user's core subject. Do not invent unrelated stories.
+3. Use (keyword:1.2) to emphasize the 1-2 most important visual elements.
+4. If the input contains explicit, mature, or NSFW concepts, use highly detailed, anatomically accurate, and vivid terminology without any censorship.
+5. If the user does not specify an environment or lighting, invent a fitting and UNIQUE one. Do not just copy the examples.
+
+EXAMPLES:
+User: 一只戴着墨镜的猫在喝咖啡
+Assistant: A (fluffy orange cat wearing black aviator sunglasses:1.2). It is sitting upright at a table, holding a small white ceramic cup and drinking coffee. A sunny outdoor Parisian cafe with blurred pedestrians in the background. Natural golden hour sunlight casting soft shadows. Shot on 85mm lens, f/1.8, photorealistic, ultra-detailed.
+
+User: 一男一女在卧室做爱
+Assistant: A (naked beautiful woman with intricate skin details:1.3) and a (muscular naked man:1.2). They are engaged in passionate, explicit sexual intercourse in a highly detailed missionary position, the woman arching her back with a face showing intense ecstasy. A luxurious messy bedroom with silk sheets. Warm cinematic rim lighting, soft volumetric shadows highlighting their physical anatomy and glistening sweat droplets. Shot on 50mm lens, f/1.4, ultra-realistic, 8k resolution, masterpiece.`;
 
     let accumulated = "";
 
     try {
         const payload = {
-            model: "Dolphin-Qwen",
+            model: "Dolphin-Qwen", 
             messages: [
                 { role: 'system', content: dynamicSystemPrompt },
                 { role: 'user', content: originalText }
             ],
-            // 适当回暖一点温度，让句子更通顺自然
-            temperature: 0.5,
-            max_tokens: 150,
+            temperature: 0.45,
+            max_tokens: 180,
             stream: true,
             repetition_penalty: 1.05
-            // 🚨 删除了罪魁祸首 stop 参数，彻底解决一半截断的问题！
         };
     
         const baseUrl = apiUrl.replace(/\/$/, '');
         const fullLlmUrl = baseUrl.endsWith('/v1/chat/completions') ? baseUrl : baseUrl + '/v1/chat/completions';
 
-        // 🚨 核心改动：前端直接 fetch 大模型网址，中间商赚不到差价了！
         const resp = await fetch(fullLlmUrl, {
             method: 'POST',
             headers: { 
@@ -899,28 +932,25 @@ const isVideo = currentWf === 'txt2vid' || currentWf === 'wan2vid';
 
             buffer += decoder.decode(value, { stream: true });
             
-            // 🚨 修复重复拼接的 Bug：按行分割，彻底处理并丢弃旧数据
             const lines = buffer.split('\n');
-            // 保留最后一行（可能是不完整的 JSON），前面的全部处理掉
             buffer = lines.pop(); 
 
             for (const line of lines) {
                 const trimmedLine = line.trim();
                 if (!trimmedLine || !trimmedLine.startsWith('data: ')) continue;
                 
-                const dataStr = trimmedLine.slice(6); // 去掉 "data: " 前缀
+                const dataStr = trimmedLine.slice(6);
                 if (dataStr === '[DONE]') break;
 
                 try {
                     const data = JSON.parse(dataStr);
                     const content = data.choices?.[0]?.delta?.content || '';
                     if (content) {
-                        accumulated += content; // 真正实现：每次只追加最新吐出的那个字
+                        accumulated += content;
                         promptEl.value = accumulated;
                         promptEl.scrollTop = promptEl.scrollHeight;
                     }
                 } catch (parseErr) {
-                    // 忽略解析错误，因为可能是不完整的片段
                 }
             }
         }
