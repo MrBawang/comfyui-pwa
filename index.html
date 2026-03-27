@@ -1036,10 +1036,15 @@ async function enhancePrompt() {
             stream: true
         };
 
+        const baseUrl = apiUrl.replace(/\/$/, '');  // 去掉末尾斜杠
+	    const fullLlmUrl = baseUrl.endsWith('/v1/chat/completions') 
+        ? baseUrl 
+        : baseUrl + '/v1/chat/completions';
+
         const proxyData = {
-            llm_url: apiUrl.endsWith('/v1/chat/completions') ? apiUrl : apiUrl.replace(/\/$/, '') + '/v1/chat/completions',
-            llm_key: key,
-            payload: payload
+          llm_url: fullLlmUrl,
+          llm_key: key,
+          payload: payload
         };
 
         console.log('🚀 开始增强提示词请求（Cloudflare 优化版）');
