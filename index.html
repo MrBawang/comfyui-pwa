@@ -1062,24 +1062,46 @@ async function enhancePrompt() {
             
             for (let line of lines) {
                 line = line.trim();
-                if (line.startsWith('data: ') && !line.includes('[DONE]')) {
+                if (!line) continue;
+                
+                // 🚨 终极修复：去掉了空格限制，完美兼容 data:{} 和 data: {}
+                if (line.startsWith('data:') && !line.includes('[DONE]')) {
                     try {
-                        const data = JSON.parse(line.slice(6));
+                        // 提取 data: 之后的所有内容
+                        const jsonStr = line.substring(5).trim();
+                        if (!jsonStr) continue;
+                        
+                        const data = JSON.parse(jsonStr);
                         if (data.error) throw new Error(data.error); 
+                        
                         const text = data.choices?.[0]?.delta?.content;
                         if (text) {
                             promptEl.value += text;
-                            promptEl.scrollTop = promptEl.scrollHeight; 
+                            promptEl.scrollTop = promptEl.scrollHeight; // 自动滚到底部
                         }
                     } catch(e) { 
                         if (e.message.includes('vLLM请求失败') || e.message.includes('error')) {
                             throw e; 
                         }
+                        // 忽略解析到一半被截断的碎 JSON
                     }
                 }
             }
         }
-        toast('✨ 高质量提示词扩写完成！');
+        
+        // 保底：防止最后一口气的数据留在 buffer 里没解析
+        if (buffer.trim().startsWith('data:') && !buffer.includes('[DONE]')) {
+             try {
+                 const text = JSON.parse(buffer.substring(5).trim()).choices?.[0]?.delta?.content;
+                 if (text) promptEl.value += text;
+             } catch(e) {}
+        }
+
+        if (promptEl.value === "") {
+             toast('⚠️ 收到响应但内容为空，可能触发了安全过滤或解析异常');
+        } else {
+             toast('✨ 高质量提示词扩写完成！');
+        }
         
     } catch (err) {
         console.error(`[扩写请求失败]:`, err);
