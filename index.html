@@ -988,7 +988,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('llm-api-url').addEventListener('blur', e => localStorage.setItem('llm_api_url', e.target.value.trim()));
 });
 
-// 🚨 终极修复：网关代理 + 流式缓冲 + 超时控制，完美打字机
+// 🚨 终极修复：保持绝对兼容和兜底的解析器
 async function enhancePrompt() {
     const key = localStorage.getItem('llm_api_key');
     const apiUrl = localStorage.getItem('llm_api_url');
@@ -1030,7 +1030,6 @@ async function enhancePrompt() {
             payload: payload
         };
 
-        // 🚨 重加回超时控制器，但放宽到 300 秒（5分钟），足以应付极端的冷启动
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 300000);
 
@@ -1058,38 +1057,37 @@ async function enhancePrompt() {
             
             buffer += decoder.decode(value, { stream: true });
             const lines = buffer.split('\n');
-            buffer = lines.pop(); // 将残碎片段放回缓存
+            buffer = lines.pop(); // 保留不完整的残块
             
             for (let line of lines) {
                 line = line.trim();
                 if (!line) continue;
                 
-                // 🚨 终极修复：去掉了空格限制，完美兼容 data:{} 和 data: {}
                 if (line.startsWith('data:') && !line.includes('[DONE]')) {
                     try {
-                        // 提取 data: 之后的所有内容
                         const jsonStr = line.substring(5).trim();
                         if (!jsonStr) continue;
                         
                         const data = JSON.parse(jsonStr);
-                        if (data.error) throw new Error(data.error); 
+                        
+                        if (data.error) {
+                            throw new Error("PROXY_ERR: " + data.error); 
+                        }
                         
                         const text = data.choices?.[0]?.delta?.content;
                         if (text) {
                             promptEl.value += text;
-                            promptEl.scrollTop = promptEl.scrollHeight; // 自动滚到底部
+                            promptEl.scrollTop = promptEl.scrollHeight; 
                         }
                     } catch(e) { 
-                        if (e.message.includes('vLLM请求失败') || e.message.includes('error')) {
-                            throw e; 
+                        if (e.message.startsWith('PROXY_ERR:')) {
+                            throw new Error(e.message.substring(11)); 
                         }
-                        // 忽略解析到一半被截断的碎 JSON
                     }
                 }
             }
         }
         
-        // 保底：防止最后一口气的数据留在 buffer 里没解析
         if (buffer.trim().startsWith('data:') && !buffer.includes('[DONE]')) {
              try {
                  const text = JSON.parse(buffer.substring(5).trim()).choices?.[0]?.delta?.content;
@@ -1098,7 +1096,7 @@ async function enhancePrompt() {
         }
 
         if (promptEl.value === "") {
-             toast('⚠️ 收到响应但内容为空，可能触发了安全过滤或解析异常');
+             toast('⚠️ 收到响应但内容为空，可能 URL 配置错误或被模型过滤');
         } else {
              toast('✨ 高质量提示词扩写完成！');
         }
