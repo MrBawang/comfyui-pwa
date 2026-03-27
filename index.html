@@ -388,9 +388,11 @@ input[type=range]:active::-webkit-slider-thumb{transform:scale(1.15)}
       </div>
 	<div class="card">
 	  <div class="card-title">✨ AI 提示词助手配置</div>
-	  <input type="text" id="llm-api-key" placeholder="填入 Modal 的 API Key (sk-xxx)" autocorrect="off" autocapitalize="none" spellcheck="false" style="margin-bottom:10px">
-	  <input type="text" id="llm-api-url" placeholder="Modal 部署后的完整 V1 URL" autocorrect="off" autocapitalize="none" spellcheck="false">
-	  <div style="font-size:11px;color:var(--text3);margin-top:8px;line-height:1.4">用于将中文扩写为 Flux/Wan2 高质量 Prompt，支持冷启动自动重试。</div>
+	  <input type="text" id="llm-api-key" placeholder="填入 vLLM 的 API Key (sk-llama-art-master-2026)" autocorrect="off" autocapitalize="none" spellcheck="false" style="margin-bottom:10px">
+	  <input type="text" id="llm-api-url" placeholder="vLLM 的 Modal URL（只填域名即可，如 https://xxx.modal.run）" autocorrect="off" autocapitalize="none" spellcheck="false">
+	  <div style="font-size:11px;color:var(--text3);margin-top:8px;line-height:1.4;margin-bottom:10px">只需填 Modal 部署后的域名，路径会自动补全。</div>
+	  <button id="test-llm-btn" onclick="testLlmConnection()" style="width:100%;padding:9px;border:none;border-radius:var(--rsm);background:var(--bg3);color:var(--ac);font-family:var(--font);font-size:13px;font-weight:500;cursor:pointer;">🔍 测试 LLM 连接</button>
+	  <div id="llm-test-result" style="font-size:12px;color:var(--text2);margin-top:8px;line-height:1.5;display:none;padding:8px;background:var(--bg3);border-radius:var(--rxs);word-break:break-all"></div>
 	</div>
       <div class="card">
         <div class="card-title">生成参数</div>
@@ -1156,6 +1158,79 @@ async function enhancePrompt() {
         btn.textContent = '✨ AI 自动扩写并翻译为英文 (长按可重置)';
         btn.disabled = false;
     }
+}
+// 🔍 LLM 连接诊断函数
+async function testLlmConnection() {
+    const key = localStorage.getItem('llm_api_key');
+    const apiUrl = localStorage.getItem('llm_api_url');
+    const gatewayUrl = getApi();
+    const resultEl = document.getElementById('llm-test-result');
+    const btn = document.getElementById('test-llm-btn');
+
+    resultEl.style.display = 'block';
+    resultEl.style.color = 'var(--text2)';
+    resultEl.textContent = '测试中…';
+    btn.disabled = true;
+
+    const log = (msg, color) => {
+        resultEl.style.color = color || 'var(--text2)';
+        resultEl.textContent = msg;
+        console.log('[LLM Test]', msg);
+    };
+
+    if (!gatewayUrl) { log('❌ 未配置主 API 地址', '#ff3b30'); btn.disabled=false; return; }
+    if (!apiUrl)     { log('❌ 未配置 LLM URL', '#ff3b30'); btn.disabled=false; return; }
+    if (!key)        { log('❌ 未配置 LLM Key', '#ff3b30'); btn.disabled=false; return; }
+
+    try {
+        log(`⏳ 向网关发送测试请求...\n网关: ${gatewayUrl}\nLLM URL: ${apiUrl}`);
+
+        const payload = {
+            model: "Dolphin-Qwen",
+            messages: [{ role: 'user', content: 'Hi' }],
+            max_tokens: 5,
+            stream: true
+        };
+
+        const resp = await fetch(gatewayUrl + '/api/enhance_proxy', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ llm_url: apiUrl, llm_key: key, payload })
+        });
+
+        log(`⏳ 网关响应状态: HTTP ${resp.status}，正在读取流...`);
+
+        if (!resp.ok) {
+            const errText = await resp.text();
+            log(`❌ 网关错误 HTTP ${resp.status}:\n${errText.slice(0,200)}`, '#ff3b30');
+            btn.disabled = false; return;
+        }
+
+        const reader = resp.body.getReader();
+        const decoder = new TextDecoder();
+        let received = '';
+        let chunks = 0;
+
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            chunks++;
+            received += decoder.decode(value, { stream: true });
+            if (chunks >= 3) { reader.cancel(); break; } // 收到3个chunk就够了
+        }
+
+        if (received.includes('"error"')) {
+            const errMatch = received.match(/"error"\s*:\s*"([^"]+)"/);
+            log(`❌ vLLM 返回错误:\n${errMatch ? errMatch[1] : received.slice(0,300)}`, '#ff3b30');
+        } else if (received.includes('data:')) {
+            log(`✅ 连接成功！收到 ${chunks} 个数据块\n${received.slice(0,150)}`, '#34c759');
+        } else {
+            log(`⚠️ 收到响应但格式异常:\n${received.slice(0,200)}`, '#ff9f0a');
+        }
+    } catch(e) {
+        log(`❌ 请求失败: ${e.message}`, '#ff3b30');
+    }
+    btn.disabled = false;
 }
 </script>
 </body>
