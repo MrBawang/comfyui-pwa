@@ -857,9 +857,10 @@ async function enhancePrompt() {
             temperature: 0.85,
             max_tokens: 180,
             stream: true,
-            repetition_penalty: 1.15,
-            frequency_penalty: 0.3,
-            presence_penalty: 0.2,
+            repetition_penalty: 1.05,
+            frequency_penalty: 0.1,
+            presence_penalty: 0.1,
+			stop: [".\n", "\n\n"], 
         };
     
         const baseUrl = apiUrl.replace(/\/$/, '');
