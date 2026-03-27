@@ -1035,7 +1035,7 @@ async function enhancePrompt() {
             max_tokens: 180,  
             stream: true
         };
-
+	
         const baseUrl = apiUrl.replace(/\/$/, '');  // 去掉末尾斜杠
 	    const fullLlmUrl = baseUrl.endsWith('/v1/chat/completions') 
         ? baseUrl 
