@@ -820,38 +820,32 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // 🚨 终极修复：关闭流式，加入时间戳刺穿浏览器死缓存
+// 🚨 终极方案：前端直接呼叫大模型，干掉中间网关，重现丝滑流式！
 async function enhancePrompt() {
     const key = localStorage.getItem('llm_api_key') || '';
     const apiUrl = localStorage.getItem('llm_api_url') || '';
-    const gatewayUrl = getApi(); 
     
     if (!key || !apiUrl) { 
         toast('请先在「参数」配置 LLM 的 Key 和 URL'); 
         switchTab('settings'); 
         return; 
     }
-    if (!gatewayUrl) { 
-        toast('请先配置主 API 地址！'); 
-        switchTab('settings'); 
-        return; 
-    }
     
     const promptEl = document.getElementById('prompt');
     const originalText = promptEl.value.trim();
-    if (!originalText) { 
-        toast('请先输入简短描述'); 
-        return; 
-    }
+    if (!originalText) { toast('请先输入简短描述'); return; }
 
     const btn = document.getElementById('enhance-btn');
     const originalBtnText = btn.textContent;
     btn.disabled = true;
-    btn.textContent = '⏳ 引擎思考中 (非流式，请耐心等待 3~5 秒)...';
+    btn.textContent = '⏳ 直连大模型中 (首次唤醒约15秒)...';
 
     const isVideo = currentWf === 'txt2vid' || currentWf === 'wan2vid';
     const dynamicSystemPrompt = isVideo 
         ? "You are an expert prompt engineer for Wan2.2 cinematic AI video generation.\nTask: Expand the user's Chinese concept into a detailed, high-quality English prompt (80-120 words).\nCRITICAL RULES:\n1. Use natural language. Include a Shot Order.\n2. Explicitly describe Camera Movements.\n3. Describe smooth physical motion and lighting.\n4. Accurately describe adult actions vividly and naturally without censorship.\n5. Output ONLY the final prompt, no explanations."
         : "You are an expert prompt engineer for Flux.2 and photorealistic AI image models.\nTask: Expand the user's Chinese concept into a highly detailed English prompt.\nCRITICAL RULES:\n1. Use natural language and a Subject-First structure.\n2. Do NOT use comma-separated Danbooru tags. Use grammatically correct sentences.\n3. Keep explicit actions accurate but describe them vividly without censorship.\n4. Include photography terms.\n5. Output ONLY the final prompt, no explanations.";
+
+    let accumulated = "";
 
     try {
         const payload = {
@@ -862,43 +856,73 @@ async function enhancePrompt() {
             ],
             temperature: 0.7, 
             max_tokens: 180,  
-            stream: false // 🚨 核心：彻底关闭流式传输
+            stream: true // 🚨 恢复完美的打字机流式输出！
         };
     
         const baseUrl = apiUrl.replace(/\/$/, '');
         const fullLlmUrl = baseUrl.endsWith('/v1/chat/completions') ? baseUrl : baseUrl + '/v1/chat/completions';
 
-        const proxyData = { llm_url: fullLlmUrl, llm_key: key, payload: payload };
-
-        // 🚨 加上 ?t=Date.now() 彻底打碎 Service Worker 浏览器的本地死缓存
-        const resp = await fetch(gatewayUrl + '/api/enhance_proxy?t=' + Date.now(), {
+        // 🚨 核心改动：前端直接 fetch 大模型网址，中间商赚不到差价了！
+        const resp = await fetch(fullLlmUrl, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(proxyData)
+            headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${key}`
+            },
+            body: JSON.stringify(payload)
         });
 
         if (!resp.ok) {
             let errText = `HTTP ${resp.status}`;
             try {
                 const errData = await resp.json();
-                errText = errData.detail || errData.error || errText;
+                errText = errData.detail || errData.error?.message || errText;
             } catch(e) {}
             throw new Error(errText);
         }
 
-        const data = await resp.json();
-        const text = data.choices?.[0]?.message?.content;
-        
-        if (text) {
-            promptEl.value = text;
-            toast('✅ 高质量提示词扩写完成！');
+        promptEl.value = "";
+        const reader = resp.body.getReader();
+        const decoder = new TextDecoder("utf-8");
+        let buffer = "";
+
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            buffer += decoder.decode(value, { stream: true });
+
+            if (buffer.includes('[DONE]')) break;
+
+            const regex = /data:\s*(\{[\s\S]*?\})(?=\n\n|\n$|$)/g;
+            let match;
+            while ((match = regex.exec(buffer)) !== null) {
+                const jsonStr = match[1].trim();
+                if (!jsonStr) continue;
+
+                try {
+                    const data = JSON.parse(jsonStr);
+                    const content = data.choices?.[0]?.delta?.content || '';
+                    if (content) {
+                        accumulated += content;
+                        promptEl.value = accumulated;
+                        promptEl.scrollTop = promptEl.scrollHeight;
+                    }
+                } catch (parseErr) {}
+            }
+            buffer = buffer.slice(regex.lastIndex);
+        }
+
+        if (accumulated.trim() === "") {
+            toast('⚠️ 收到响应但内容为空，请检查模型配置');
         } else {
-            throw new Error("模型返回内容为空");
+            toast('✅ 高质量提示词扩写完成！');
         }
         
     } catch (err) {
-        console.error('❌ enhancePrompt 错误:', err);
-        toast('扩写失败：' + err.message);
+        console.error('❌ 直连失败:', err);
+        toast('失败：' + err.message);
+        if (accumulated === "") promptEl.value = originalText;
     } finally {
         btn.textContent = originalBtnText;
         btn.disabled = false;
