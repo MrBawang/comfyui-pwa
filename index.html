@@ -890,31 +890,36 @@ async function enhancePrompt() {
         const decoder = new TextDecoder("utf-8");
         let buffer = "";
 
-        while (true) {
+		while (true) {
             const { done, value } = await reader.read();
             if (done) break;
 
             buffer += decoder.decode(value, { stream: true });
+            
+            // 🚨 修复重复拼接的 Bug：按行分割，彻底处理并丢弃旧数据
+            const lines = buffer.split('\n');
+            // 保留最后一行（可能是不完整的 JSON），前面的全部处理掉
+            buffer = lines.pop(); 
 
-            if (buffer.includes('[DONE]')) break;
-
-            const regex = /data:\s*(\{[\s\S]*?\})(?=\n\n|\n$|$)/g;
-            let match;
-            while ((match = regex.exec(buffer)) !== null) {
-                const jsonStr = match[1].trim();
-                if (!jsonStr) continue;
+            for (const line of lines) {
+                const trimmedLine = line.trim();
+                if (!trimmedLine || !trimmedLine.startsWith('data: ')) continue;
+                
+                const dataStr = trimmedLine.slice(6); // 去掉 "data: " 前缀
+                if (dataStr === '[DONE]') break;
 
                 try {
-                    const data = JSON.parse(jsonStr);
+                    const data = JSON.parse(dataStr);
                     const content = data.choices?.[0]?.delta?.content || '';
                     if (content) {
-                        accumulated += content;
+                        accumulated += content; // 真正实现：每次只追加最新吐出的那个字
                         promptEl.value = accumulated;
                         promptEl.scrollTop = promptEl.scrollHeight;
                     }
-                } catch (parseErr) {}
+                } catch (parseErr) {
+                    // 忽略解析错误，因为可能是不完整的片段
+                }
             }
-            buffer = buffer.slice(regex.lastIndex);
         }
 
         if (accumulated.trim() === "") {
