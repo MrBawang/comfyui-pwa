@@ -841,10 +841,12 @@ async function enhancePrompt() {
     btn.disabled = true;
     btn.textContent = '⏳ 直连大模型中 (首次唤醒约15秒)...';
 
-    const isVideo = currentWf === 'txt2vid' || currentWf === 'wan2vid';
+const isVideo = currentWf === 'txt2vid' || currentWf === 'wan2vid';
+    
+    // 🚨 加上了紧箍咒：要求绝对忠实于原意，严格禁止偏离主题的过度脑补
     const dynamicSystemPrompt = isVideo 
-        ? "You are an expert prompt engineer for Wan2.2 cinematic AI video generation.\nTask: Expand the user's Chinese concept into a precise, highly effective English prompt (MAX 40-60 words).\nCRITICAL RULES:\n1. Be strictly concise. Focus ONLY on the main subject, exact action, and environment.\n2. Do NOT write long narratives or metaphors.\n3. Include a specific camera movement (e.g., pan left, dolly in).\n4. Output ONLY the final prompt, no explanations."
-        : "You are an expert prompt engineer for Flux.2 photorealistic AI image models.\nTask: Expand the user's Chinese concept into a precise English prompt (MAX 30-50 words).\nCRITICAL RULES:\n1. Be extremely concise and literal. Focus heavily on the main subject.\n2. Add 2-3 specific photography terms (e.g., cinematic lighting, 85mm lens, 4k resolution).\n3. Do NOT write a long story or use complex grammar. Use comma-separated phrases if necessary.\n4. Output ONLY the final prompt, no explanations.";
+        ? "You are an expert prompt engineer for Wan2.2 cinematic AI video generation.\nTask: Accurately TRANSLATE the user's Chinese input into English, then enhance it with cinematic details (MAX 40-60 words).\nCRITICAL RULES:\n1. FAITHFULLY preserve the original subject, meaning, and action. Do NOT invent unrelated storylines or characters.\n2. Include a specific Camera Movement (e.g., pan left, dolly in).\n3. Describe smooth physical motion and lighting.\n4. Output ONLY the final prompt, no explanations."
+        : "You are an expert prompt engineer for Flux.2 photorealistic AI image models.\nTask: Accurately TRANSLATE the user's Chinese input into English, then add photographic details (MAX 30-50 words).\nCRITICAL RULES:\n1. FAITHFULLY preserve the original subject and meaning. Do NOT hallucinate or add unrelated elements.\n2. Add 2-3 specific photography terms (e.g., cinematic lighting, 85mm lens, 4k resolution).\n3. Keep it extremely concise and literal using a Subject-First structure.\n4. Output ONLY the final prompt, no explanations.";
 
     let accumulated = "";
 
@@ -855,13 +857,14 @@ async function enhancePrompt() {
                 { role: 'system', content: dynamicSystemPrompt },
                 { role: 'user', content: originalText }
             ],
-            temperature: 0.85,
+            // 🚨 核心降温：从 0.85 降到 0.35，让模型变得极其严谨、听话、不乱发散
+            temperature: 0.35,
             max_tokens: 180,
             stream: true,
             repetition_penalty: 1.05,
             frequency_penalty: 0.1,
             presence_penalty: 0.1,
-			stop: [".\n", "\n\n"], 
+            stop: [".\n", "\n\n"], 
         };
     
         const baseUrl = apiUrl.replace(/\/$/, '');
