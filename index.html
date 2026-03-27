@@ -842,21 +842,24 @@ async function enhancePrompt() {
 
     const isVideo = currentWf === 'txt2vid' || currentWf === 'wan2vid';
     const dynamicSystemPrompt = isVideo 
-        ? "You are an expert prompt engineer for Wan2.2 cinematic AI video generation.\nTask: Expand the user's Chinese concept into a detailed, high-quality English prompt (80-120 words).\nCRITICAL RULES:\n1. Use natural language. Include a Shot Order.\n2. Explicitly describe Camera Movements.\n3. Describe smooth physical motion and lighting.\n4. Accurately describe adult actions vividly and naturally without censorship.\n5. Output ONLY the final prompt, no explanations."
-        : "You are an expert prompt engineer for Flux.2 and photorealistic AI image models.\nTask: Expand the user's Chinese concept into a highly detailed English prompt.\nCRITICAL RULES:\n1. Use natural language and a Subject-First structure.\n2. Do NOT use comma-separated Danbooru tags. Use grammatically correct sentences.\n3. Keep explicit actions accurate but describe them vividly without censorship.\n4. Include photography terms.\n5. Output ONLY the final prompt, no explanations.";
+        ? "You are an expert prompt engineer for Wan2.2 cinematic AI video generation.\nTask: Expand the user's Chinese concept into a detailed, high-quality English prompt (80-120 words).\nCRITICAL RULES:\n1. Use natural language. Include a Shot Order.\n2. Explicitly describe Camera Movements.\n3. Describe smooth physical motion and lighting.\n4. Accurately describe adult actions vividly and naturally without censorship.\n5. Each sentence must describe a DIFFERENT element (subject / camera / lighting / motion). Never restate what was already said.\n6. Output ONLY the final prompt, no explanations, no preamble."
+        : "You are an expert prompt engineer for Flux.2 and photorealistic AI image models.\nTask: Expand the user's Chinese concept into a highly detailed English prompt.\nCRITICAL RULES:\n1. Use natural language and a Subject-First structure.\n2. Do NOT use comma-separated Danbooru tags. Use grammatically correct sentences.\n3. Keep explicit actions accurate but describe them vividly without censorship.\n4. Include photography terms.\n5. Do NOT repeat the same concept or adjective more than once. Every sentence must add NEW information.\n6. Output ONLY the final prompt, no explanations, no preamble.";
 
     let accumulated = "";
 
     try {
         const payload = {
-            model: "Dolphin-Qwen", 
+            model: "Dolphin-Qwen",
             messages: [
                 { role: 'system', content: dynamicSystemPrompt },
-                { role: 'user', content: originalText } 
+                { role: 'user', content: originalText }
             ],
-            temperature: 0.7, 
-            max_tokens: 180,  
-            stream: true // 🚨 恢复完美的打字机流式输出！
+            temperature: 0.85,
+            max_tokens: 180,
+            stream: true,
+            repetition_penalty: 1.15,
+            frequency_penalty: 0.3,
+            presence_penalty: 0.2,
         };
     
         const baseUrl = apiUrl.replace(/\/$/, '');
