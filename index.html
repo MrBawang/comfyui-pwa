@@ -1062,44 +1062,40 @@ async function enhancePrompt() {
         const decoder = new TextDecoder("utf-8");
         let buffer = "";
 
-        while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
+		// 在 index.html 的 enhancePrompt 函数中，替换原有的 while 循环内部逻辑：
+		while (true) {
+			const { done, value } = await reader.read();
+			if (done) break;
 
-            buffer += decoder.decode(value, { stream: true });
+			buffer += decoder.decode(value, { stream: true });
 
-            // 更鲁棒的正则：匹配 data: {json} （支持 chunk 被切断的情况）
-            const regex = /data:\s*(\{[\s\S]*?\})(?=\n\n|\n$|$)/g;
-            let match;
-            while ((match = regex.exec(buffer)) !== null) {
-                const jsonStr = match[1].trim();
-                if (!jsonStr) continue;
+			// 检查是否结束
+			if (buffer.includes('data: [DONE]')) {
+				break; // 流正常结束
+			}
 
-                try {
-                    const data = JSON.parse(jsonStr);
+			const regex = /data:\s*(\{[\s\S]*?\})(?=\n\n|\n$|$)/g;
+			let match;
+			while ((match = regex.exec(buffer)) !== null) {
+				const jsonStr = match[1].trim();
+				if (!jsonStr) continue;
 
-                    if (data.error) {
-                        throw new Error("[PROXY_ERR] " + data.error);
-                    }
+				try {
+					const data = JSON.parse(jsonStr);
+					if (data.error) throw new Error("[PROXY_ERR] " + data.error);
 
-                    const content = data.choices?.[0]?.delta?.content || '';
-                    if (content) {
-                        accumulated += content;
-                        promptEl.value = accumulated;
-                        promptEl.scrollTop = promptEl.scrollHeight;
-                        console.log('📝 收到 token:', content);
-                    }
-                } catch (parseErr) {
-                    if (parseErr.message.includes('PROXY_ERR')) {
-                        throw parseErr;
-                    }
-                    console.warn('⚠️ SSE 解析跳过残缺 chunk:', parseErr.message, jsonStr.substring(0, 100));
-                }
-            }
-
-            // 保留未处理完的 buffer
-            buffer = buffer.slice(regex.lastIndex);
-        }
+					const content = data.choices?.[0]?.delta?.content || '';
+					if (content) {
+						accumulated += content;
+						promptEl.value = accumulated;
+						promptEl.scrollTop = promptEl.scrollHeight;
+					}
+				} catch (parseErr) {
+					if (parseErr.message.includes('PROXY_ERR')) throw parseErr;
+				}
+			}
+			buffer = buffer.slice(regex.lastIndex);
+		}
 
         // 处理最后可能剩余的 buffer
         if (buffer.trim().startsWith('data:')) {
