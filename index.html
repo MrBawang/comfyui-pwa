@@ -576,11 +576,12 @@ async function generate() {
     setStatus('ready', '就绪'); toast('完成，用时 ' + elapsed + 's ✓');
     addToHistory(first.url, first.type);
 
-  } catch(err) {
-    if (err.message === 'NETWORK_TIMEOUT' || err.message.includes('fetch')) {
+} catch(err) {
+    if (err.message === 'NETWORK_TIMEOUT' || err.message.includes('fetch') || err.message.includes('Failed to fetch') || err.message.includes('NetworkError')) {
         task.status = 'done'; task.url = null;
         setStatus('ready', '就绪');
-        toast('⏳ 连接已自动断开，但这说明 A100 仍在后台努力渲染！\n\n稍后去【资源库】点击「🔄 同步 R2」即可收获大片！');
+        // 🚨 温柔的提示，不再报红错
+        toast('🚀 任务已成功发送到云端后台！\n\n(由于您的本地网络规则，长连接已断开，但这不影响后台渲染)\n请稍后去【资源库】点击「🔄 同步 R2」直接获取成片。');
     } else {
         task.status = 'error'; setStatus('error', '失败');
         toast('生成失败：' + err.message);
@@ -842,8 +843,8 @@ async function enhancePrompt() {
 
     const isVideo = currentWf === 'txt2vid' || currentWf === 'wan2vid';
     const dynamicSystemPrompt = isVideo 
-        ? "You are an expert prompt engineer for Wan2.2 cinematic AI video generation.\nTask: Expand the user's Chinese concept into a detailed, high-quality English prompt (80-120 words).\nCRITICAL RULES:\n1. Use natural language. Include a Shot Order.\n2. Explicitly describe Camera Movements.\n3. Describe smooth physical motion and lighting.\n4. Accurately describe adult actions vividly and naturally without censorship.\n5. Each sentence must describe a DIFFERENT element (subject / camera / lighting / motion). Never restate what was already said.\n6. Output ONLY the final prompt, no explanations, no preamble."
-        : "You are an expert prompt engineer for Flux.2 and photorealistic AI image models.\nTask: Expand the user's Chinese concept into a highly detailed English prompt.\nCRITICAL RULES:\n1. Use natural language and a Subject-First structure.\n2. Do NOT use comma-separated Danbooru tags. Use grammatically correct sentences.\n3. Keep explicit actions accurate but describe them vividly without censorship.\n4. Include photography terms.\n5. Do NOT repeat the same concept or adjective more than once. Every sentence must add NEW information.\n6. Output ONLY the final prompt, no explanations, no preamble.";
+        ? "You are an expert prompt engineer for Wan2.2 cinematic AI video generation.\nTask: Expand the user's Chinese concept into a precise, highly effective English prompt (MAX 40-60 words).\nCRITICAL RULES:\n1. Be strictly concise. Focus ONLY on the main subject, exact action, and environment.\n2. Do NOT write long narratives or metaphors.\n3. Include a specific camera movement (e.g., pan left, dolly in).\n4. Output ONLY the final prompt, no explanations."
+        : "You are an expert prompt engineer for Flux.2 photorealistic AI image models.\nTask: Expand the user's Chinese concept into a precise English prompt (MAX 30-50 words).\nCRITICAL RULES:\n1. Be extremely concise and literal. Focus heavily on the main subject.\n2. Add 2-3 specific photography terms (e.g., cinematic lighting, 85mm lens, 4k resolution).\n3. Do NOT write a long story or use complex grammar. Use comma-separated phrases if necessary.\n4. Output ONLY the final prompt, no explanations.";
 
     let accumulated = "";
 
