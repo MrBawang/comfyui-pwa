@@ -248,13 +248,10 @@ input[type=range]:active::-webkit-slider-thumb{transform:scale(1.15)}
 .tab-item.active .tab-label{color:var(--ac)}
 
 #gen-btn{
-  position: fixed;
-  bottom: calc(var(--sab) + var(--tab-h) + var(--strip-h) + 12px);
-  left: 50%;
-  transform: translateX(-50%);
-  width: calc(100% - 32px);
-  max-width: 398px;
-  z-index: 60;
+  position: sticky;
+  bottom: var(--bottom-ui-h); 
+  z-index: 45;
+  width: 100%;
   padding: 16px;
   border: none;
   border-radius: var(--r);
@@ -267,33 +264,23 @@ input[type=range]:active::-webkit-slider-thumb{transform:scale(1.15)}
   cursor: pointer;
   transition: all .15s;
   -webkit-appearance: none;
-  box-shadow: 0 4px 20px rgba(0,113,227,.5);
+  margin-top: 10px; 
+  box-shadow: 0 4px 16px rgba(0,113,227,.45); 
 }
-#gen-btn:active{transform:translateX(-50%) scale(.98);background:var(--ac-hover)}
-#gen-btn:disabled{background:var(--bg3);color:var(--text3);box-shadow:none;cursor:not-allowed;transform:translateX(-50%)}
-/* 生成面板底部留出空间给固定按钮 */
-#panel-create{ padding-bottom: calc(var(--bottom-ui-h) + 68px) !important; }
+#gen-btn:active{transform:scale(.98);background:var(--ac-hover)}
+#gen-btn:disabled{background:var(--bg3);color:var(--text3);box-shadow:none;cursor:not-allowed;transform:none}
 
 #lb{
   display:none;position:fixed;inset:0;
-  background:rgba(0,0,0,.96);
+  background:rgba(0,0,0,.92);backdrop-filter:blur(30px);-webkit-backdrop-filter:blur(30px);
   z-index:500;flex-direction:column;align-items:center;justify-content:center;
-  gap:0;padding:0;
+  gap:20px;padding:calc(var(--sat)+20px) 20px calc(var(--sab)+20px);
 }
 #lb.show{display:flex}
-#lb-media-wrap{
-  flex:1;width:100%;display:flex;align-items:center;justify-content:center;
-  overflow:hidden;padding:calc(var(--sat)+12px) 0 12px;
-  cursor:zoom-in;
-}
-#lb img{max-width:100%;max-height:100%;object-fit:contain;border-radius:0;display:block;}
-#lb video{max-width:100%;max-height:100%;object-fit:contain;border-radius:0;display:block;}
-.lb-actions{
-  flex-shrink:0;display:flex;flex-wrap:wrap;justify-content:center;gap:8px;
-  width:100%;padding:12px 16px calc(var(--sab)+16px);
-  background:linear-gradient(transparent, rgba(0,0,0,.7));
-}
-.lb-btn{padding:11px 18px;border-radius:99px;border:none;font-family:var(--font);font-size:14px;font-weight:500;cursor:pointer;-webkit-appearance:none;background:rgba(255,255,255,.15);color:#fff;transition:opacity .15s;flex:1;min-width:90px;text-align:center;}
+#lb img{max-width:100%;max-height:75dvh;border-radius:var(--r);object-fit:contain;}
+#lb video{max-width:100%;max-height:75dvh;border-radius:var(--r);object-fit:contain;}
+.lb-actions{display:flex;flex-wrap:wrap;justify-content:center;gap:10px;width:100%;max-width:350px;}
+.lb-btn{padding:12px 20px;border-radius:99px;border:none;font-family:var(--font);font-size:14px;font-weight:500;cursor:pointer;-webkit-appearance:none;background:rgba(255,255,255,.15);color:#fff;transition:opacity .15s;flex:1;min-width:100px;text-align:center;}
 .lb-btn.primary{background:#fff;color:#1d1d1f}
 .lb-btn.magic{background:var(--ac);color:#fff;box-shadow:0 2px 10px rgba(0,113,227,.4);flex:100%;}
 .lb-btn:active{opacity:.75}
@@ -388,11 +375,9 @@ input[type=range]:active::-webkit-slider-thumb{transform:scale(1.15)}
       </div>
 	<div class="card">
 	  <div class="card-title">✨ AI 提示词助手配置</div>
-	  <input type="text" id="llm-api-key" placeholder="填入 vLLM 的 API Key (sk-llama-art-master-2026)" autocorrect="off" autocapitalize="none" spellcheck="false" style="margin-bottom:10px">
-	  <input type="text" id="llm-api-url" placeholder="vLLM 的 Modal URL（只填域名即可，如 https://xxx.modal.run）" autocorrect="off" autocapitalize="none" spellcheck="false">
-	  <div style="font-size:11px;color:var(--text3);margin-top:8px;line-height:1.4;margin-bottom:10px">只需填 Modal 部署后的域名，路径会自动补全。</div>
-	  <button id="test-llm-btn" onclick="testLlmConnection()" style="width:100%;padding:9px;border:none;border-radius:var(--rsm);background:var(--bg3);color:var(--ac);font-family:var(--font);font-size:13px;font-weight:500;cursor:pointer;">🔍 测试 LLM 连接</button>
-	  <div id="llm-test-result" style="font-size:12px;color:var(--text2);margin-top:8px;line-height:1.5;display:none;padding:8px;background:var(--bg3);border-radius:var(--rxs);word-break:break-all"></div>
+	  <input type="text" id="llm-api-key" placeholder="填入 Modal 的 API Key (sk-xxx)" autocorrect="off" autocapitalize="none" spellcheck="false" style="margin-bottom:10px">
+	  <input type="text" id="llm-api-url" placeholder="Modal 部署后的完整 V1 URL" autocorrect="off" autocapitalize="none" spellcheck="false">
+	  <div style="font-size:11px;color:var(--text3);margin-top:8px;line-height:1.4">用于将中文扩写为 Flux/Wan2 高质量 Prompt，支持冷启动自动重试。</div>
 	</div>
       <div class="card">
         <div class="card-title">生成参数</div>
@@ -500,11 +485,9 @@ input[type=range]:active::-webkit-slider-thumb{transform:scale(1.15)}
 
 </div>
 
-<div id="lb">
-  <div id="lb-media-wrap" onclick="handleLbMediaClick(event)">
-    <img id="lb-img" src="" alt="" style="display:none">
-    <video id="lb-vid" controls muted loop autoplay playsinline style="display:none;"></video>
-  </div>
+<div id="lb" onclick="closeLb()">
+  <img id="lb-img" src="" alt="" style="display:none">
+  <video id="lb-vid" controls muted loop autoplay playsinline style="display:none;"></video>
   <div class="lb-actions" onclick="event.stopPropagation()">
     <button class="lb-btn magic" id="lb-action-btn" onclick="lbAction()"></button>
     <button class="lb-btn primary" onclick="lbSave()">保存相册</button>
@@ -721,7 +704,7 @@ async function generate() {
     if (elapsed === 20) document.getElementById('prog-label').textContent = '加载极速模型中…';
     if (elapsed === 50) document.getElementById('prog-label').textContent = '正在渲染画面…';
     if (elapsed === 120) document.getElementById('prog-label').textContent = '正在进行重绘或超清放大…';
-    if (elapsed === 250) document.getElementById('prog-label').textContent = '任务较大，后台轮询结果中…';
+    if (elapsed === 250) document.getElementById('prog-label').textContent = '任务较大，稍后可能会断开连接，请勿担心…';
     renderStrip(); 
   }, 1000);
 
@@ -743,26 +726,12 @@ async function generate() {
     fd.append('params', JSON.stringify(params));
     if (meta.requires_image && task.imageFile) fd.append('image', task.imageFile);
 
-    const resp = await fetch(api + '/api/generate', { method: 'POST', body: fd });
+    const resp = await fetch(api + '/api/generate', { method: 'POST', body: fd }).catch(e => { throw new Error('NETWORK_TIMEOUT'); });
     
+    if (resp.status === 504 || resp.status === 502) throw new Error('NETWORK_TIMEOUT');
     if (!resp.ok) throw new Error('HTTP ' + resp.status);
 
     const data = await resp.json();
-
-    // 🔧 修复：处理 pending 状态（长任务超过 55s 未完成，改用轮询）
-    if (data.status === 'pending' && data.call_id) {
-      document.getElementById('prog-label').textContent = '后台渲染中，轮询结果…';
-      const first = await pollResult(api, data.call_id);
-      const isVid = first.type === 'video';
-      task.status = 'done'; task.url = first.url; task.type = first.type;
-      showResult(first.url, isVid);
-      lastSrc = first.url; lastIsVid = isVid;
-      document.getElementById('result-actions').style.display = 'flex';
-      setStatus('ready', '就绪'); toast('完成，用时 ' + elapsed + 's ✓');
-      addToHistory(first.url, first.type);
-      return;
-    }
-
     if (data.status !== 'ok' || !data.results?.length) throw new Error('未返回结果');
 
     const first = data.results[0];
@@ -777,38 +746,20 @@ async function generate() {
     addToHistory(first.url, first.type);
 
   } catch(err) {
-    task.status = 'error'; setStatus('error', '失败');
-    toast('生成失败：' + err.message);
+    if (err.message === 'NETWORK_TIMEOUT' || err.message.includes('fetch')) {
+        task.status = 'done'; task.url = null;
+        setStatus('ready', '就绪');
+        toast('⏳ 连接已自动断开，但这说明 A100 仍在后台努力渲染！\n\n稍后去【资源库】点击「🔄 同步 R2」即可收获大片！');
+    } else {
+        task.status = 'error'; setStatus('error', '失败');
+        toast('生成失败：' + err.message);
+    }
   } finally {
     busy = false; clearInterval(timer);
     document.getElementById('prog').classList.remove('show');
     btn.disabled = false; btn.textContent = '生成';
     renderStrip();
   }
-}
-
-// 🔧 新增：轮询 /api/result/{call_id} 直到任务完成
-async function pollResult(api, callId) {
-  const maxWait = 3600; // 最多等 1 小时
-  const interval = 5;   // 每 5 秒轮询一次
-  let waited = 0;
-  while (waited < maxWait) {
-    await new Promise(r => setTimeout(r, interval * 1000));
-    waited += interval;
-    try {
-      const resp = await fetch(`${api}/api/result/${callId}`);
-      if (!resp.ok) throw new Error('HTTP ' + resp.status);
-      const data = await resp.json();
-      if (data.status === 'ok' && data.results?.length) return data.results[0];
-      if (data.status === 'error') throw new Error(data.message || '后台任务失败');
-      // status === 'pending'，继续等
-      document.getElementById('prog-label').textContent = `后台渲染中… (${waited}s)`;
-    } catch(e) {
-      if (e.message.includes('后台任务失败')) throw e;
-      // 网络抖动忽略，继续重试
-    }
-  }
-  throw new Error('等待超时，请去资源库手动同步 R2');
 }
 
 function showResult(src, isVid) {
@@ -889,9 +840,8 @@ function renderGallery(files) {
     else if (f.type === 'gif') div.innerHTML = `<img src="${f.url}" loading="lazy" alt=""><div class="g-badge">GIF</div>`;
     else div.innerHTML = `<img src="${f.url}" loading="lazy" alt="">`;
     if (f.workflow_name) div.innerHTML += `<div class="g-wf-badge">${f.workflow_name}</div>`;
-    div.innerHTML += `<button class="g-del" onclick="delFile('${encodeURIComponent(f.filename)}',event)">×</button>`;
-    // 🔧 修复：整个 div 都可点击放大，不限于内部 img/video
-    div.onclick = (e) => { if (!e.target.classList.contains('g-del')) openLb(f.url, isVid?'vid':'img'); };
+    div.innerHTML += `<button class="g-del" onclick="delFile('${f.filename}',event)">×</button>`;
+    div.querySelector(isVid ? 'video' : 'img').onclick = () => openLb(f.url, isVid?'vid':'img');
     grid.appendChild(div);
   });
 }
@@ -920,23 +870,6 @@ function openLb(src, type) {
 }
 
 function closeLb() { document.getElementById('lb').classList.remove('show'); document.getElementById('lb-vid').src = ''; lbCurrentSrc = null; }
-
-// 🔧 修复：单击关闭灯箱，双击请求原生全屏
-let lbLastTap = 0;
-function handleLbMediaClick(e) {
-  const now = Date.now();
-  if (now - lbLastTap < 300) {
-    // 双击 → 全屏
-    const el = lbCurrentType === 'vid' ? document.getElementById('lb-vid') : document.getElementById('lb-img');
-    if (el.requestFullscreen) el.requestFullscreen();
-    else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
-    lbLastTap = 0;
-  } else {
-    lbLastTap = now;
-    // 单击 → 关闭（延迟判断，避免误触）
-    setTimeout(() => { if (Date.now() - lbLastTap >= 280) closeLb(); }, 300);
-  }
-}
 
 async function lbAction() {
   if (!lbCurrentSrc) return;
@@ -1045,7 +978,6 @@ async function manualConnect() {
 
 if('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(()=>{});
 
-// 长按重置扩写按钮
 document.addEventListener('DOMContentLoaded', () => {
     const savedLlmKey = localStorage.getItem('llm_api_key');
     if (savedLlmKey) document.getElementById('llm-api-key').value = savedLlmKey;
@@ -1054,20 +986,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const savedLlmUrl = localStorage.getItem('llm_api_url'); 
     if (savedLlmUrl) document.getElementById('llm-api-url').value = savedLlmUrl;
     document.getElementById('llm-api-url').addEventListener('blur', e => localStorage.setItem('llm_api_url', e.target.value.trim()));
-
-    // 长按扩写按钮 → 清空提示词
-    const enhBtn = document.getElementById('enhance-btn');
-    let pressTimer = null;
-    enhBtn.addEventListener('touchstart', () => { pressTimer = setTimeout(() => { document.getElementById('prompt').value = ''; toast('已重置提示词'); }, 600); }, { passive: true });
-    enhBtn.addEventListener('touchend', () => clearTimeout(pressTimer));
-    enhBtn.addEventListener('mousedown', () => { pressTimer = setTimeout(() => { document.getElementById('prompt').value = ''; toast('已重置提示词'); }, 600); });
-    enhBtn.addEventListener('mouseup', () => clearTimeout(pressTimer));
 });
 
+// 🚨 终极修复：网关代理 + 流式缓冲 + 超时控制，完美打字机
 async function enhancePrompt() {
     const key = localStorage.getItem('llm_api_key');
     const apiUrl = localStorage.getItem('llm_api_url');
-    const gatewayUrl = getApi();
+    const gatewayUrl = getApi(); 
     
     if (!key || !apiUrl) { toast('请先在「参数」配置 LLM 的 Key 和 URL'); switchTab('settings'); return; }
     if (!gatewayUrl) { toast('请先配置主 API 地址！我们需要网关作中转'); switchTab('settings'); return; }
@@ -1085,7 +1010,7 @@ async function enhancePrompt() {
         : "You are an expert prompt engineer for Flux.2 and photorealistic AI image models.\nTask: Expand the user's Chinese concept into a highly detailed English prompt.\nCRITICAL RULES:\n1. Use natural language and a Subject-First structure.\n2. Do NOT use comma-separated Danbooru tags. Use grammatically correct sentences.\n3. Keep explicit actions accurate but describe them vividly without censorship.\n4. Include photography terms (e.g., 85mm lens, f/2.0, cinematic lighting).\n5. Output ONLY the final prompt, no explanations.";
 
     try {
-        btn.textContent = '⏳ 引擎唤醒中…';
+        btn.textContent = '⏳ 引擎唤醒中 (网关代理，冷启动绝不断连)...';
         
         const payload = {
             model: "Dolphin-Qwen", 
@@ -1094,28 +1019,38 @@ async function enhancePrompt() {
                 { role: 'user', content: originalText } 
             ],
             temperature: 0.6, 
-            max_tokens: 150,
+            max_tokens: 150,  
             stop: ["<|im_end|>", "<|im_start|>", "<|endoftext|>", "Input:"],
             stream: true
         };
 
+        const proxyData = {
+            llm_url: apiUrl,
+            llm_key: key,
+            payload: payload
+        };
+
+        // 🚨 重加回超时控制器，但放宽到 300 秒（5分钟），足以应付极端的冷启动
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 300000);
+
         const resp = await fetch(gatewayUrl + '/api/enhance_proxy', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ llm_url: apiUrl, llm_key: key, payload })
+            body: JSON.stringify(proxyData),
+            signal: controller.signal
         });
+        
+        clearTimeout(timeoutId);
 
-        if (!resp.ok) {
-            const errText = await resp.text().catch(() => '');
-            throw new Error(`网关返回 HTTP ${resp.status}${errText ? ': ' + errText.slice(0,100) : ''}`);
-        }
+        if (!resp.ok) throw new Error(`HTTP 异常: ${resp.status}`);
 
-        promptEl.value = "";
-        btn.textContent = '✨ 正在生成...';
+        promptEl.value = ""; 
+        btn.textContent = '✨ 正在极速生成...';
         const reader = resp.body.getReader();
         const decoder = new TextDecoder("utf-8");
-        let buffer = "";
-        let hasOutput = false;
+        
+        let buffer = ""; 
 
         while (true) {
             const { done, value } = await reader.read();
@@ -1123,114 +1058,36 @@ async function enhancePrompt() {
             
             buffer += decoder.decode(value, { stream: true });
             const lines = buffer.split('\n');
-            buffer = lines.pop(); // 保留末尾不完整行
-
+            buffer = lines.pop(); // 将残碎片段放回缓存
+            
             for (let line of lines) {
                 line = line.trim();
-                if (!line.startsWith('data:')) continue;
-                const jsonStr = line.slice(5).trim();
-                if (jsonStr === '[DONE]') continue;
-                try {
-                    const chunk = JSON.parse(jsonStr);
-                    // 🔧 修复：检查服务端透传的错误字段，直接抛出
-                    if (chunk.error) throw new Error(chunk.error);
-                    const text = chunk.choices?.[0]?.delta?.content;
-                    if (text) {
-                        promptEl.value += text;
-                        promptEl.scrollTop = promptEl.scrollHeight;
-                        hasOutput = true;
+                if (line.startsWith('data: ') && !line.includes('[DONE]')) {
+                    try {
+                        const data = JSON.parse(line.slice(6));
+                        if (data.error) throw new Error(data.error); 
+                        const text = data.choices?.[0]?.delta?.content;
+                        if (text) {
+                            promptEl.value += text;
+                            promptEl.scrollTop = promptEl.scrollHeight; 
+                        }
+                    } catch(e) { 
+                        if (e.message.includes('vLLM请求失败') || e.message.includes('error')) {
+                            throw e; 
+                        }
                     }
-                } catch(parseErr) {
-                    // 只有明确是业务错误才往外抛，JSON解析失败跳过即可
-                    if (parseErr.message && !parseErr.message.startsWith('JSON')) throw parseErr;
                 }
             }
         }
-
-        if (!hasOutput) throw new Error('模型没有返回任何内容，请检查 LLM URL 和 Key 是否正确');
-        toast('✨ 扩写完成！');
+        toast('✨ 高质量提示词扩写完成！');
         
     } catch (err) {
-        console.error('[扩写失败]', err);
-        promptEl.value = originalText; // 🔧 出错时恢复原始文字
-        toast('❌ 扩写失败：' + err.message);
+        console.error(`[扩写请求失败]:`, err);
+        toast('❌ 失败：' + err.message);
     } finally {
         btn.textContent = '✨ AI 自动扩写并翻译为英文 (长按可重置)';
         btn.disabled = false;
     }
-}
-// 🔍 LLM 连接诊断函数
-async function testLlmConnection() {
-    const key = localStorage.getItem('llm_api_key');
-    const apiUrl = localStorage.getItem('llm_api_url');
-    const gatewayUrl = getApi();
-    const resultEl = document.getElementById('llm-test-result');
-    const btn = document.getElementById('test-llm-btn');
-
-    resultEl.style.display = 'block';
-    resultEl.style.color = 'var(--text2)';
-    resultEl.textContent = '测试中…';
-    btn.disabled = true;
-
-    const log = (msg, color) => {
-        resultEl.style.color = color || 'var(--text2)';
-        resultEl.textContent = msg;
-        console.log('[LLM Test]', msg);
-    };
-
-    if (!gatewayUrl) { log('❌ 未配置主 API 地址', '#ff3b30'); btn.disabled=false; return; }
-    if (!apiUrl)     { log('❌ 未配置 LLM URL', '#ff3b30'); btn.disabled=false; return; }
-    if (!key)        { log('❌ 未配置 LLM Key', '#ff3b30'); btn.disabled=false; return; }
-
-    try {
-        log(`⏳ 向网关发送测试请求...\n网关: ${gatewayUrl}\nLLM URL: ${apiUrl}`);
-
-        const payload = {
-            model: "Dolphin-Qwen",
-            messages: [{ role: 'user', content: 'Hi' }],
-            max_tokens: 5,
-            stream: true
-        };
-
-        const resp = await fetch(gatewayUrl + '/api/enhance_proxy', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ llm_url: apiUrl, llm_key: key, payload })
-        });
-
-        log(`⏳ 网关响应状态: HTTP ${resp.status}，正在读取流...`);
-
-        if (!resp.ok) {
-            const errText = await resp.text();
-            log(`❌ 网关错误 HTTP ${resp.status}:\n${errText.slice(0,200)}`, '#ff3b30');
-            btn.disabled = false; return;
-        }
-
-        const reader = resp.body.getReader();
-        const decoder = new TextDecoder();
-        let received = '';
-        let chunks = 0;
-
-        while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            chunks++;
-            received += decoder.decode(value, { stream: true });
-            if (chunks >= 3) { reader.cancel(); break; } // 收到3个chunk就够了
-        }
-
-        if (received.includes('"error"')) {
-            const errMatch = received.match(/"error"\s*:\s*"([^"]+)"/);
-            log(`❌ vLLM 返回错误:\n${errMatch ? errMatch[1] : received.slice(0,300)}`, '#ff3b30');
-        } else if (received.includes('data:')) {
-            log(`✅ 连接成功！收到 ${chunks} 个数据块\n${received.slice(0,150)}`, '#34c759');
-        } else {
-            log(`⚠️ 收到响应但格式异常:\n${received.slice(0,200)}`, '#ff9f0a');
-        }
-    } catch(e) {
-        log(`❌ 请求失败: ${e.message}`, '#ff3b30');
-    }
-    btn.disabled = false;
 }
 </script>
 </body>
