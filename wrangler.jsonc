@@ -1,0 +1,65 @@
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "comfyui-pwa",
+	"main": "worker/src/index.ts",
+	"compatibility_date": "2026-07-28",
+	"compatibility_flags": [
+		"nodejs_compat"
+	],
+	"assets": {
+		"directory": "./web/dist",
+		"binding": "ASSETS",
+		"not_found_handling": "single-page-application",
+		"run_worker_first": [
+			"/api/*"
+		]
+	},
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "lorachef-studio",
+			"database_id": "10ead135-ed70-4048-9f13-cbbd89355540",
+			"migrations_dir": "migrations"
+		}
+	],
+	"r2_buckets": [
+		{
+			"binding": "ASSETS_BUCKET",
+			"bucket_name": "comfyui"
+		}
+	],
+	"durable_objects": {
+		"bindings": [
+			{
+				"name": "GPU_QUEUE",
+				"class_name": "GpuQueue"
+			}
+		]
+	},
+	"migrations": [
+		{
+			"tag": "v1",
+			"new_sqlite_classes": [
+				"GpuQueue"
+			]
+		}
+	],
+	"ai": {
+		"binding": "AI"
+	},
+	"triggers": {
+		"crons": [
+			"17 3 * * *"
+		]
+	},
+	"vars": {
+		"APP_ENV": "production",
+		"WORKERS_AI_MODEL": "@cf/qwen/qwen3-30b-a3b-fp8",
+		"STORAGE_WARNING_BYTES": "8589934592",
+		"STORAGE_STOP_BYTES": "9663676416",
+		"R2_CLASS_A_STOP": "800000",
+		"R2_CLASS_B_STOP": "8000000",
+		"WORKERS_AI_STOP_NEURONS": "9000",
+		"MODAL_POLL_SECONDS": "8"
+	}
+}

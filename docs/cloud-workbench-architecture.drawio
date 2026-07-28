@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mxfile host="drawio" version="26.0.0">
+  <diagram name="Cloud Workbench">
+    <mxGraphModel dx="1422" dy="794" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="900" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+        <mxCell id="client-tier" value="客户端" style="swimlane;startSize=30;horizontal=1;rounded=0;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="20" y="20" width="1360" height="150" as="geometry"/>
+        </mxCell>
+        <mxCell id="browser" value="手机 / PC 浏览器&#xa;Vite React PWA" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="client-tier">
+          <mxGeometry x="80" y="50" width="220" height="70" as="geometry"/>
+        </mxCell>
+        <mxCell id="agent" value="PC LoRAChef Agent&#xa;主动领取 / 本地筛选" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="client-tier">
+          <mxGeometry x="1000" y="50" width="260" height="70" as="geometry"/>
+        </mxCell>
+        <mxCell id="cf-tier" value="Cloudflare 免费层" style="swimlane;startSize=30;horizontal=1;rounded=0;whiteSpace=wrap;html=1;fillColor=#fff7e6;strokeColor=#d79b00;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="20" y="210" width="1360" height="220" as="geometry"/>
+        </mxCell>
+        <mxCell id="access" value="Cloudflare Access&#xa;身份认证" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;" vertex="1" parent="cf-tier">
+          <mxGeometry x="60" y="80" width="180" height="70" as="geometry"/>
+        </mxCell>
+        <mxCell id="worker" value="Hono Worker API&#xa;流式代理 / 业务规则" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;" vertex="1" parent="cf-tier">
+          <mxGeometry x="330" y="70" width="220" height="90" as="geometry"/>
+        </mxCell>
+        <mxCell id="queue" value="Durable Object&#xa;全局串行 GPU 队列" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="cf-tier">
+          <mxGeometry x="650" y="70" width="220" height="90" as="geometry"/>
+        </mxCell>
+        <mxCell id="workers-ai" value="Workers AI&#xa;日常聊天" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="cf-tier">
+          <mxGeometry x="1000" y="80" width="200" height="70" as="geometry"/>
+        </mxCell>
+        <mxCell id="data-tier" value="持久化数据" style="swimlane;startSize=30;horizontal=1;rounded=0;whiteSpace=wrap;html=1;fillColor=#eef7ee;strokeColor=#82b366;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="20" y="470" width="650" height="210" as="geometry"/>
+        </mxCell>
+        <mxCell id="d1" value="D1 SQLite&#xa;项目 / 任务 / 对话 / 报告" style="shape=cylinder3;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="data-tier">
+          <mxGeometry x="70" y="70" width="210" height="90" as="geometry"/>
+        </mxCell>
+        <mxCell id="r2" value="私有 R2&#xa;参考图 / 输出图 / 手动数据集" style="shape=cylinder3;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="data-tier">
+          <mxGeometry x="370" y="70" width="220" height="90" as="geometry"/>
+        </mxCell>
+        <mxCell id="modal-tier" value="Modal 按需 GPU" style="swimlane;startSize=30;horizontal=1;rounded=0;whiteSpace=wrap;html=1;fillColor=#f6f1f8;strokeColor=#9673a6;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="730" y="470" width="650" height="260" as="geometry"/>
+        </mxCell>
+        <mxCell id="comfy" value="ComfyUI L40S&#xa;工作流执行" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;" vertex="1" parent="modal-tier">
+          <mxGeometry x="50" y="60" width="200" height="80" as="geometry"/>
+        </mxCell>
+        <mxCell id="llm" value="Qwen3.6 L40S&#xa;Q6 → Q5 → Q4" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;" vertex="1" parent="modal-tier">
+          <mxGeometry x="350" y="60" width="220" height="80" as="geometry"/>
+        </mxCell>
+        <mxCell id="volumes" value="独立 Modal Volumes&#xa;Comfy 资源 / GGUF 权重" style="shape=cylinder3;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;" vertex="1" parent="modal-tier">
+          <mxGeometry x="200" y="170" width="240" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="e1" value="HTTPS" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;entryX=0.25;entryY=0;" edge="1" parent="1" source="browser" target="access">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e2" value="领取 / 续租 / 报告" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;entryX=0.75;entryY=0;" edge="1" parent="1" source="agent" target="access">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e3" value="认证身份" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="1" source="access" target="worker">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e4" value="排队" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.4;entryX=0;entryY=0.4;" edge="1" parent="1" source="worker" target="queue">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e5" value="普通聊天 SSE" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.7;entryX=0;entryY=0.7;" edge="1" parent="1" source="worker" target="workers-ai">
+          <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="950" y="390"/></Array></mxGeometry>
+        </mxCell>
+        <mxCell id="e6" value="SQL" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.35;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="worker" target="d1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e7" value="流式对象" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.65;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="worker" target="r2">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e8" value="串行工作流" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.35;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="queue" target="comfy">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e9" value="提示词 SSE" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.75;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="worker" target="llm">
+          <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="1100" y="450"/></Array></mxGeometry>
+        </mxCell>
+        <mxCell id="e10" value="结果转存" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=0;exitY=0.6;entryX=1;entryY=0.6;" edge="1" parent="1" source="comfy" target="r2">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e11" value="模型 / 节点" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.3;exitY=1;entryX=0.25;entryY=0;" edge="1" parent="1" source="comfy" target="volumes">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e12" value="已校验 GGUF" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.7;exitY=1;entryX=0.75;entryY=0;" edge="1" parent="1" source="llm" target="volumes">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

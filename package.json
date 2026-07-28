@@ -1,0 +1,40 @@
+{
+  "name": "lorachef-studio-cloud",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --config web/vite.config.ts --host 127.0.0.1",
+    "dev:cloud": "npm run build && wrangler dev",
+    "build": "vite build --config web/vite.config.ts",
+    "typecheck": "tsc -p web/tsconfig.json --noEmit && tsc -p worker/tsconfig.json --noEmit",
+    "test:frontend": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test tests/*.test.mjs",
+    "test:worker": "vitest run",
+    "test:python": "uv run --python 3.11 --with-requirements requirements-modal.txt python -m unittest discover -s tests -p 'test_*.py' -v",
+    "test": "npm run test:frontend && npm run test:worker && npm run test:python",
+    "deploy": "npm run build && wrangler deploy",
+    "deploy:dry-run": "npm run build && wrangler deploy --dry-run --outdir .wrangler-dist",
+    "config:check": "node scripts/check-config.mjs",
+    "llm:checksums": "node scripts/resolve-llm-checksums.mjs",
+    "db:migrate:local": "wrangler d1 migrations apply lorachef-studio --local",
+    "db:migrate:remote": "wrangler d1 migrations apply lorachef-studio --remote"
+  },
+  "dependencies": {
+    "hono": "^4.10.6",
+    "lucide-react": "^0.468.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "react-router-dom": "^7.9.5"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260727.1",
+    "@types/node": "^22.15.0",
+    "@types/react": "^19.1.0",
+    "@types/react-dom": "^19.1.0",
+    "@vitejs/plugin-react": "^4.3.4",
+    "typescript": "^5.8.3",
+    "vite": "^6.0.1",
+    "vitest": "^3.2.4",
+    "wrangler": "^4.26.0"
+  }
+}

@@ -1,0 +1,21 @@
+# Local identity used only by `wrangler dev` when Cloudflare Access is absent.
+APP_ENV=development
+DEV_USER_EMAIL=you@example.com
+
+# Production-only Access JWT settings are configured on the deployed Worker.
+# CF_ACCESS_TEAM_DOMAIN=your-team.cloudflareaccess.com
+# CF_ACCESS_AUD=your-access-application-audience-tag
+
+# Existing ComfyUI Modal ASGI endpoint and its COMFY_API_TOKEN.
+MODAL_API_URL=https://your-workspace--comfy-desk-api.modal.run
+MODAL_API_TOKEN=replace-with-a-long-random-value
+
+# Set to true only after manually confirming Workspace and Environment hard budgets.
+MODAL_BUDGET_CONFIRMED=false
+
+# Shared only with the pull-based PC LoRAChef Agent.
+LORACHEF_AGENT_TOKEN=replace-with-a-third-long-random-value
+
+# Stage 2 only; leave unset for the initial deployment.
+# MODAL_LLM_URL=https://your-workspace--lorachef-qwen36-qwenserver-serve.modal.run
+# MODAL_LLM_TOKEN=replace-with-a-different-long-random-value
