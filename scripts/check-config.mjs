@@ -27,10 +27,14 @@ function configured(name) {
 
 const d1 = config.d1_databases?.find((item) => item.binding === "DB");
 const vars = config.vars ?? {};
+const productionDomain = config.routes?.some((item) =>
+  item.pattern === "luminaflow.space" && item.custom_domain === true,
+);
 
 console.log("Stage 1 - repository configuration");
 check("D1 database_id", /^[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(d1?.database_id ?? ""),
   d1?.database_id === "REPLACE_WITH_D1_DATABASE_ID" ? "replace the placeholder with `wrangler d1 create lorachef-studio` UUID" : "UUID format");
+check("Worker custom domain", productionDomain, "luminaflow.space");
 check("R2 bucket", config.r2_buckets?.some((item) => item.binding === "ASSETS_BUCKET" && item.bucket_name === "comfyui"), "comfyui");
 check("R2 byte hard stop", vars.STORAGE_STOP_BYTES === "9663676416", "9 GiB");
 check("R2 operation hard stops", vars.R2_CLASS_A_STOP === "800000" && vars.R2_CLASS_B_STOP === "8000000", "800,000 A / 8,000,000 B");

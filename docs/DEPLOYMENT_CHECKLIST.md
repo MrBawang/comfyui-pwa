@@ -49,6 +49,7 @@ Create an Access Service Token restricted to `/api/agent/v1/*`, then fill `~/.lo
 ## Safe Order
 
 1. Confirm Workers and Zero Trust are Free, R2 is Standard, and the shared bucket has no unknown continuous writer.
+   Confirm `luminaflow.space` is not connected under R2 **Custom Domains**; it belongs to the `comfyui-pwa` Worker custom domain.
 2. Run `npx wrangler d1 create lorachef-studio`, copy the returned UUID into `wrangler.jsonc`, then run `npm run config:check`.
 3. Apply additive D1 migrations with `npm run db:migrate:remote`.
 4. Configure Access and the Stage 1 Worker Secrets.

@@ -27,7 +27,7 @@ npm run deploy:dry-run
 
 ## Cloudflare Setup
 
-1. Create D1, replace `REPLACE_WITH_D1_DATABASE_ID` in `wrangler.jsonc`, and reuse the existing `comfyui` R2 bucket after a capacity check.
+1. Create D1, replace `REPLACE_WITH_D1_DATABASE_ID` in `wrangler.jsonc`, and reuse the existing `comfyui` R2 bucket after a capacity check. `luminaflow.space` must be the Worker's custom domain, not an R2 public-bucket domain; R2 objects remain private and are served through authenticated Worker routes.
 
 ```bash
 npx wrangler d1 create lorachef-studio
