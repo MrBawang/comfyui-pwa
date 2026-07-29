@@ -90,17 +90,17 @@ export function CostApprovalProvider({ children }: { children: ReactNode }) {
         {pending && <div className="cost-dialog__body">
           <header>
             <span><AlertTriangle size={20} /></span>
-            <div><strong id="cost-dialog-title">{pending.quote.label}</strong><small>Modal 按量计费确认</small></div>
+            <div><strong id="cost-dialog-title">{pending.quote.label}</strong><small>{pending.quote.action === "wisart-image" ? "中转站积分确认" : "Modal 按量计费确认"}</small></div>
             <button type="button" title="取消" aria-label="取消费用确认" onClick={dismiss} disabled={approving}><X size={18} /></button>
           </header>
           <p>{pending.quote.description}</p>
           <dl>
             <div className="cost-dialog__target"><dt><Target size={16} />本次目标</dt><dd title={pending.quote.target}>{pending.quote.target}</dd></div>
             <div><dt><Clock3 size={16} />最长估算</dt><dd>{formatDuration(pending.quote.maxDurationSeconds)}</dd></div>
-            <div><dt><DollarSign size={16} />最坏估算</dt><dd>US${pending.quote.estimatedMaxUsd.toFixed(4)}</dd></div>
+            <div><dt><DollarSign size={16} />平台估算</dt><dd>{pending.quote.action === "wisart-image" ? "按中转站账户计费" : `US$${pending.quote.estimatedMaxUsd.toFixed(4)}`}</dd></div>
             <div><dt><ShieldCheck size={16} />批准范围</dt><dd>{pending.quote.batchCount} 项 · {formatBytes(pending.quote.fileBytes)}</dd></div>
           </dl>
-          <small className="cost-dialog__note">金额按 L40S 全时运行保守估算，实际以 Modal 账单为准。批准令牌 5 分钟内仅可使用一次，失败项不会自动重跑。</small>
+          <small className="cost-dialog__note">{pending.quote.action === "wisart-image" ? "中转站积分由中转站账户扣除；Cloudflare 不会自动切换服务或重试。" : "金额按 L40S 全时运行保守估算，实际以 Modal 账单为准。"} 批准令牌 5 分钟内仅可使用一次，失败项不会自动重跑。</small>
           {error && <p className="form-error" role="alert">{error}</p>}
           <footer>
             <button type="button" className="button-secondary" onClick={dismiss} disabled={approving}>取消</button>

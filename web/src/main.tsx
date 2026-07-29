@@ -5,6 +5,7 @@ import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { CharacterProjects } from "@/components/character-projects";
 import { ChatPage } from "@/components/chat-page";
 import { GalleryPage } from "@/components/gallery-page";
+import { ImageGeneratorPage } from "@/components/image-generator";
 import { MorePage } from "@/components/more-page";
 import { StorageBrowserPage } from "@/components/storage-browser-page";
 import { WorkflowRunner } from "@/components/workflow-runner";
@@ -30,6 +31,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
           <Route path="/projects" element={<CharacterProjects isMock={false} />} />
           <Route path="/workflows" element={<Workbench isMock={false} />} />
           <Route path="/chat" element={<ChatPage />} />
+          <Route path="/image" element={<ImageGeneratorPage />} />
           <Route path="/gallery" element={<GalleryPage />} />
           <Route path="/more" element={<MorePage />} />
           <Route path="/storage" element={<StorageBrowserPage />} />

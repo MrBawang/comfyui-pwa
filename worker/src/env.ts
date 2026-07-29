@@ -3,6 +3,7 @@ export interface Env {
   ASSETS_BUCKET: R2Bucket;
   ASSETS: Fetcher;
   GPU_QUEUE: DurableObjectNamespace;
+  WISART_QUEUE: DurableObjectNamespace;
   AI: Ai;
   APP_ENV: string;
   DEV_USER_EMAIL?: string;
@@ -14,6 +15,9 @@ export interface Env {
   MODAL_BUDGET_CONFIRMED?: string;
   MODAL_LLM_URL?: string;
   MODAL_LLM_TOKEN?: string;
+  WISART_API_URL?: string;
+  WISART_API_KEY?: string;
+  WISART_DEFAULT_MODEL?: string;
   LORACHEF_AGENT_TOKEN?: string;
   R2_BROWSER_PASSWORD_SHA256?: string;
   WORKERS_AI_MODEL: string;

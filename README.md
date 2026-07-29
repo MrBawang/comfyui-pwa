@@ -35,12 +35,13 @@ npx wrangler r2 bucket info comfyui
 npm run db:migrate:remote
 ```
 
-2. `wrangler.jsonc` locks ComfyUI to the `luminaflow-studio` Workspace. Store `MODAL_API_URL=https://luminaflow-studio--comfy-desk-api.modal.run`, `MODAL_API_TOKEN`, and `LORACHEF_AGENT_TOKEN` with `wrangler secret put`. A URL from another Workspace is rejected before a cost quote is created. Leave all Modal Qwen values unset in Stage 1. After confirming the Modal Workspace and Environment hard budgets, set the Worker Secret `MODAL_BUDGET_CONFIRMED` to exactly `true`; without it, every Modal quote and submission is locked.
+2. `wrangler.jsonc` locks ComfyUI to the `luminaflow-studio` Workspace and defines the non-secret WisArt API URL/default model. Store `MODAL_API_URL=https://luminaflow-studio--comfy-desk-api.modal.run`, `MODAL_API_TOKEN`, `LORACHEF_AGENT_TOKEN`, and `WISART_API_KEY` with `wrangler secret put`. The image relay key is used only by the Worker; `/image` supports text-to-image and up to 16 reference images, then saves outputs into the private R2 gallery. Generation runs in a dedicated Durable Object alarm, so closing the page does not cancel it; an interrupted, uncertain submission is marked for manual review and is never automatically resubmitted. A URL from another Modal Workspace is rejected before a Modal cost quote is created. Leave all Modal Qwen values unset in Stage 1. After confirming the Modal Workspace and Environment hard budgets, set the Worker Secret `MODAL_BUDGET_CONFIRMED` to exactly `true`; without it, every Modal quote and submission is locked.
 3. Protect the complete custom domain with Cloudflare Access. Configure `CF_ACCESS_TEAM_DOMAIN` (for example `team.cloudflareaccess.com`) and the application's audience tag as `CF_ACCESS_AUD` on the Worker. Production API requests verify the Access JWT and do not trust a caller-supplied email header by itself. Do not leave asset paths outside the Access application.
 
 ```bash
 npx wrangler secret put CF_ACCESS_TEAM_DOMAIN
 npx wrangler secret put CF_ACCESS_AUD
+npx wrangler secret put WISART_API_KEY
 ```
 4. Create a separate R2 viewer password, store only its lowercase SHA-256 as `R2_BROWSER_PASSWORD_SHA256`, and keep the plaintext outside Git. The hidden entry under “更多 → 私有 R2” issues a 15-minute host-only session after password verification. Five failed attempts lock that Access identity for 15 minutes. The browser is read-only and every list/read still passes through the R2 operation hard stop.
 

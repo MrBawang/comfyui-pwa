@@ -4,6 +4,7 @@ import {
   MessageSquare,
   MoreHorizontal,
   Play,
+  WandSparkles,
   Workflow,
 } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -12,6 +13,7 @@ import { Link, useLocation } from "react-router-dom";
 const navigation = [
   { to: "/projects", label: "项目", desktopLabel: "人物项目", icon: FolderKanban },
   { to: "/", label: "运行", desktopLabel: "运行", icon: Play },
+  { to: "/image", label: "生图", desktopLabel: "中转站生图", icon: WandSparkles },
   { to: "/chat", label: "对话", desktopLabel: "对话", icon: MessageSquare },
   { to: "/gallery", label: "作品", desktopLabel: "作品", icon: Images },
   { to: "/workflows", label: "工作流", desktopLabel: "工作流库", icon: Workflow, secondary: true },

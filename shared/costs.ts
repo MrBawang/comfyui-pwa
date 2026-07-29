@@ -12,6 +12,7 @@ export const COST_ACTIONS = [
   "modal-chat",
   "llm-model-download",
   "llm-benchmark",
+  "wisart-image",
 ] as const;
 
 export type CostAction = (typeof COST_ACTIONS)[number];
@@ -67,5 +68,8 @@ export const costTargets = {
   },
   modalChat(threadId: string) {
     return parts("chat", threadId);
+  },
+  wisartImage(mode: "generate" | "edit", model: string, size: string, quality: string, n: number) {
+    return parts("wisart", mode, model, size, quality, String(n));
   },
 };

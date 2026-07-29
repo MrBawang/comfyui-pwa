@@ -36,7 +36,15 @@ check("D1 database_id", /^[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(d1?.database_id ?? "
   d1?.database_id === "REPLACE_WITH_D1_DATABASE_ID" ? "replace the placeholder with `wrangler d1 create lorachef-studio` UUID" : "UUID format");
 check("Worker custom domain", productionDomain, "luminaflow.space");
 check("R2 bucket", config.r2_buckets?.some((item) => item.binding === "ASSETS_BUCKET" && item.bucket_name === "comfyui"), "comfyui");
+check("WisArt background queue", config.durable_objects?.bindings?.some(
+  (item) => item.name === "WISART_QUEUE" && item.class_name === "WisartQueue",
+), "Durable Object binding");
+check("WisArt queue migration", config.migrations?.some(
+  (item) => item.new_sqlite_classes?.includes("WisartQueue"),
+), "new_sqlite_classes");
 check("Modal workspace lock", vars.MODAL_WORKSPACE === "luminaflow-studio", "luminaflow-studio");
+check("WisArt relay URL", vars.WISART_API_URL === "https://wisart.kuaileshifu.com", "HTTPS API base");
+check("WisArt default model", typeof vars.WISART_DEFAULT_MODEL === "string" && vars.WISART_DEFAULT_MODEL.length > 0, vars.WISART_DEFAULT_MODEL);
 check("R2 byte hard stop", vars.STORAGE_STOP_BYTES === "9663676416", "9 GiB");
 check("R2 operation hard stops", vars.R2_CLASS_A_STOP === "800000" && vars.R2_CLASS_B_STOP === "8000000", "800,000 A / 8,000,000 B");
 check("Workers AI hard stop", vars.WORKERS_AI_STOP_NEURONS === "9000", "9,000 Neurons/day");
@@ -47,6 +55,7 @@ for (const name of [
   "CF_ACCESS_AUD",
   "MODAL_API_URL",
   "MODAL_API_TOKEN",
+  "WISART_API_KEY",
   "LORACHEF_AGENT_TOKEN",
   "R2_BROWSER_PASSWORD_SHA256",
   "MODAL_BUDGET_CONFIRMED",

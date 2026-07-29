@@ -28,6 +28,7 @@ R2 byte and operation counters cover only objects managed through this Worker. B
 | `CF_ACCESS_AUD` | Audience Tag from the `luminaflow.space` Access application overview |
 | `MODAL_API_URL` | Exactly `https://luminaflow-studio--comfy-desk-api.modal.run`; other Workspace hosts are rejected |
 | `MODAL_API_TOKEN` | Exactly the same value as `COMFY_API_TOKEN` in Modal Secret `comfy-desk-config` |
+| `WISART_API_KEY` | API Key created in WisArt “会员中心 → API 管理”; never place it in `wrangler.jsonc` or frontend code |
 | `LORACHEF_AGENT_TOKEN` | Complete output of `openssl rand -hex 32` |
 | `R2_BROWSER_PASSWORD_SHA256` | Lowercase SHA-256 of a separate strong viewer password; store the plaintext password only in your password manager |
 | `MODAL_BUDGET_CONFIRMED` | Set to `true` only after both Modal budgets below are confirmed |
@@ -41,10 +42,13 @@ npx wrangler secret put CF_ACCESS_TEAM_DOMAIN
 npx wrangler secret put CF_ACCESS_AUD
 npx wrangler secret put MODAL_API_URL
 npx wrangler secret put MODAL_API_TOKEN
+npx wrangler secret put WISART_API_KEY
 npx wrangler secret put LORACHEF_AGENT_TOKEN
 npx wrangler secret put R2_BROWSER_PASSWORD_SHA256
 npx wrangler secret put MODAL_BUDGET_CONFIRMED
 ```
+
+The first deployment containing the image relay also applies the additive `v2` Durable Object migration for `WisartQueue`. GitHub/Cloudflare deployment performs this automatically; do not create a second queue manually.
 
 Create an Access Service Token restricted to `/api/agent/v1/*`, then fill `~/.lorachef/cloud-agent.json` with `base_url`, the shared Agent token, `agent_id: "zhouw-mac"`, and the Service Token Client ID/Secret. The Agent opens outbound connections only.
 

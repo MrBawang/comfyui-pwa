@@ -3,7 +3,7 @@ import type { Context } from "hono";
 
 import { COST_ACTIONS, type CostAction, type CostDescriptor, type CostQuote } from "../../shared/costs";
 import type { UserContext } from "./env";
-import { id, jsonError, modalBase, now, owner } from "./utils";
+import { id, jsonError, modalBase, now, owner, wisartBase } from "./utils";
 
 const QUOTE_LIFETIME_MS = 15 * 60 * 1_000;
 const APPROVAL_LIFETIME_MS = 5 * 60 * 1_000;
@@ -14,7 +14,7 @@ interface ActionSpec {
   description: string;
   maxDurationSeconds: number;
   durationPerItem?: boolean;
-  provider: "comfy" | "llm";
+  provider: "comfy" | "llm" | "wisart";
 }
 
 const ACTION_SPECS: Record<CostAction, ActionSpec> = {
@@ -97,6 +97,12 @@ const ACTION_SPECS: Record<CostAction, ActionSpec> = {
     maxDurationSeconds: 3_600,
     provider: "llm",
   },
+  "wisart-image": {
+    label: "中转站生成图片",
+    description: "使用已配置的中转站 API Key 生成图片；消耗该站点的积分或额度，失败不会自动重试。",
+    maxDurationSeconds: 900,
+    provider: "wisart",
+  },
 };
 
 interface QuoteRow {
@@ -123,7 +129,8 @@ export class CostApprovalError extends Error {
   }
 }
 
-function budgetConfirmed(c: Context<UserContext>) {
+function budgetConfirmed(c: Context<UserContext>, action: CostAction) {
+  if (ACTION_SPECS[action].provider === "wisart") return;
   if (c.env.MODAL_BUDGET_CONFIRMED !== "true") {
     throw new CostApprovalError("Modal Workspace Budget 尚未人工确认，已禁止提交计费任务", 503);
   }
@@ -131,6 +138,15 @@ function budgetConfirmed(c: Context<UserContext>) {
 
 function providerConfigured(c: Context<UserContext>, action: CostAction) {
   const spec = ACTION_SPECS[action];
+  if (spec.provider === "wisart") {
+    if (!c.env.WISART_API_KEY) throw new CostApprovalError("中转站 API Key 尚未配置", 503);
+    try {
+      wisartBase(c.env);
+    } catch (error) {
+      throw new CostApprovalError(error instanceof Error ? error.message : "中转站地址配置不正确", 503);
+    }
+    return;
+  }
   if (spec.provider === "llm") {
     if (!c.env.MODAL_LLM_URL || !c.env.MODAL_LLM_TOKEN) {
       throw new CostApprovalError("Modal Qwen 尚未部署，当前阶段不会启动模型下载或 GPU", 503);
@@ -192,8 +208,8 @@ function quoteResponse(row: QuoteRow): CostQuote {
 export const costRoutes = new Hono<UserContext>();
 
 costRoutes.post("/api/cost-quotes", async (c) => {
-  budgetConfirmed(c);
   const descriptor = normalizedDescriptor(await c.req.json<Partial<CostDescriptor>>());
+  budgetConfirmed(c, descriptor.action);
   providerConfigured(c, descriptor.action);
   const spec = ACTION_SPECS[descriptor.action];
   const totalSeconds = spec.maxDurationSeconds * (spec.durationPerItem ? descriptor.batchCount : 1);
@@ -209,7 +225,7 @@ costRoutes.post("/api/cost-quotes", async (c) => {
     label: spec.label,
     description: spec.description,
     max_duration_seconds: totalSeconds,
-    estimated_max_usd: Number((totalSeconds * L40S_USD_PER_SECOND).toFixed(4)),
+    estimated_max_usd: spec.provider === "wisart" ? 0 : Number((totalSeconds * L40S_USD_PER_SECOND).toFixed(4)),
     status: "pending",
     approval_token_hash: null,
     quote_expires_at: timestamp + QUOTE_LIFETIME_MS,
@@ -226,11 +242,11 @@ costRoutes.post("/api/cost-quotes", async (c) => {
 });
 
 costRoutes.post("/api/cost-quotes/:quoteId/approve", async (c) => {
-  budgetConfirmed(c);
   const quoteId = c.req.param("quoteId");
   const row = await c.env.DB.prepare("SELECT * FROM cost_quotes WHERE id = ?1 AND owner_email = ?2")
     .bind(quoteId, owner(c)).first<QuoteRow>();
   if (!row) return jsonError(c, "费用报价不存在", 404);
+  budgetConfirmed(c, row.action);
   if (row.status !== "pending") return jsonError(c, "费用报价已经批准、使用或过期", 409);
   const timestamp = now();
   if (row.quote_expires_at <= timestamp) {
@@ -250,8 +266,8 @@ costRoutes.post("/api/cost-quotes/:quoteId/approve", async (c) => {
 });
 
 export async function consumeCostApproval(c: Context<UserContext>, rawDescriptor: CostDescriptor) {
-  budgetConfirmed(c);
   const descriptor = normalizedDescriptor(rawDescriptor);
+  budgetConfirmed(c, descriptor.action);
   providerConfigured(c, descriptor.action);
   const approvalToken = c.req.header("x-cost-approval") ?? "";
   const [quoteId, secret, ...extra] = approvalToken.split(".");

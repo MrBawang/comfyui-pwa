@@ -67,6 +67,30 @@ export function modalHeaders(env: Env, source?: HeadersInit) {
   return headers;
 }
 
+export function wisartBase(env: Env) {
+  const value = String(env.WISART_API_URL ?? "").trim().replace(/\/$/, "");
+  if (!value) throw new Error("尚未配置 WISART_API_URL");
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    throw new Error("WISART_API_URL 不是有效地址");
+  }
+  if (url.protocol !== "https:" || url.username || url.password || url.search || url.hash) {
+    throw new Error("WISART_API_URL 必须是无查询参数的 HTTPS 地址");
+  }
+  return value;
+}
+
+export function wisartHeaders(env: Env) {
+  if (!env.WISART_API_KEY?.trim()) throw new Error("尚未配置 WISART_API_KEY");
+  return {
+    accept: "application/json, */*",
+    authorization: `Bearer ${env.WISART_API_KEY.trim()}`,
+    "user-agent": "LoRAChef-Studio/1.0",
+  };
+}
+
 export function parseJson<T>(value: string | null | undefined, fallback: T): T {
   if (!value) return fallback;
   try {

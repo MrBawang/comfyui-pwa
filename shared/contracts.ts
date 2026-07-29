@@ -39,8 +39,8 @@ export interface ChatMessage {
 
 export interface RunSummary {
   id: string;
-  kind: "workflow" | "character";
-  status: "queued" | "processing" | "succeeded" | "failed" | "cancelled";
+  kind: "workflow" | "character" | "image";
+  status: "queued" | "uploading" | "processing" | "succeeded" | "failed" | "cancelled";
   workflowId: string;
   workflowRevisionId?: string;
   workflowName?: string;

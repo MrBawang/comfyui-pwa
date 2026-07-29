@@ -175,7 +175,7 @@ export class GpuQueue implements DurableObject {
 
   private async nextRun() {
     return this.env.DB.prepare(`SELECT * FROM runs
-      WHERE status = 'processing' OR status = 'queued'
+      WHERE kind IN ('workflow', 'character') AND (status = 'processing' OR status = 'queued')
       ORDER BY CASE status WHEN 'processing' THEN 0 ELSE 1 END, priority DESC, created_at
       LIMIT 1`).first<RunRow>();
   }

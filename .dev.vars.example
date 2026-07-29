@@ -14,6 +14,10 @@ MODAL_API_TOKEN=replace-with-a-long-random-value
 # Set to true only after manually confirming Workspace and Environment hard budgets.
 MODAL_BUDGET_CONFIRMED=false
 
+# API Key for the OpenAI-compatible image relay configured in wrangler.jsonc.
+# The browser never receives this value.
+WISART_API_KEY=replace-with-your-wisart-api-key
+
 # Shared only with the pull-based PC LoRAChef Agent.
 LORACHEF_AGENT_TOKEN=replace-with-a-third-long-random-value
 

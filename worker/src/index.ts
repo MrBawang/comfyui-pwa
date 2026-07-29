@@ -10,6 +10,7 @@ import { GpuQueue } from "./gpu-queue";
 import { proxyMeteredModal, proxyModal, syncModalWorkflowCache } from "./modal";
 import { r2Delete, R2BudgetError } from "./r2-budget";
 import { storageBrowserRoutes } from "./storage-browser";
+import { wisartRoutes, WisartQueue } from "./wisart";
 import { cachedWorkflow, cachedWorkflows } from "./workflow-cache";
 import { modalEndpointStatus, owner } from "./utils";
 
@@ -49,6 +50,7 @@ app.route("/", costRoutes);
 app.route("/", coreRoutes);
 app.route("/", chatRoutes);
 app.route("/", storageBrowserRoutes);
+app.route("/", wisartRoutes);
 
 app.get("/api/config", (c) => {
   const modal = modalEndpointStatus(c.env);
@@ -60,6 +62,8 @@ app.get("/api/config", (c) => {
     modalEndpointValid: modal.valid,
     modalBudgetConfirmed: c.env.MODAL_BUDGET_CONFIRMED === "true",
     modalLlmConfigured: Boolean(c.env.MODAL_LLM_URL && c.env.MODAL_LLM_TOKEN),
+    wisartConfigured: Boolean(c.env.WISART_API_URL && c.env.WISART_API_KEY),
+    wisartDefaultModel: c.env.WISART_DEFAULT_MODEL || undefined,
     workersAiModel: c.env.WORKERS_AI_MODEL,
   });
 });
@@ -77,7 +81,7 @@ app.onError((error, c) => {
   return c.json({ message: error.message || "服务暂时不可用" }, 500);
 });
 
-export { GpuQueue };
+export { GpuQueue, WisartQueue };
 
 async function cleanupExpiredUploads(env: UserContext["Bindings"]) {
   const cutoff = Date.now() - 24 * 60 * 60 * 1_000;

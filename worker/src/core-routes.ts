@@ -8,6 +8,7 @@ import { wakeQueue } from "./gpu-queue";
 import { loadModalWorkflow } from "./modal";
 import { loadProject } from "./project-store";
 import { r2Delete, r2Get, r2Head, r2Put, r2Usage } from "./r2-budget";
+import { wakeWisartQueue } from "./wisart";
 import {
   ALLOWED_IMAGE_TYPES,
   MAX_IMAGE_BYTES,
@@ -22,8 +23,8 @@ import {
 
 interface RunRow {
   id: string;
-  kind: "workflow" | "character";
-  status: "queued" | "processing" | "succeeded" | "failed" | "cancelled";
+  kind: "workflow" | "character" | "image";
+  status: "queued" | "uploading" | "processing" | "succeeded" | "failed" | "cancelled";
   workflow_id: string;
   workflow_revision_id: string | null;
   workflow_name: string | null;
@@ -540,9 +541,13 @@ coreRoutes.delete("/api/jobs/:runId", async (c) => {
     .bind(runId, owner(c)).first<RunRow>();
   if (!run) return jsonError(c, "任务不存在", 404);
   if (["succeeded", "failed", "cancelled"].includes(run.status)) return c.json(runResponse(run));
+  if (run.kind === "image" && run.status !== "queued") {
+    return jsonError(c, "中转站任务已经提交，无法取消；系统不会自动重提", 409);
+  }
   await c.env.DB.prepare("UPDATE runs SET cancel_requested = 1, message = '正在取消', updated_at = ?1 WHERE id = ?2")
     .bind(now(), runId).run();
-  await wakeQueue(c.env);
+  if (run.kind === "image") await wakeWisartQueue(c.env);
+  else await wakeQueue(c.env);
   return c.json({ ...runResponse(run), status: "cancelled", message: "取消请求已提交" }, 202);
 });
 

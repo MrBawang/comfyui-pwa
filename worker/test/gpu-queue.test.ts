@@ -25,9 +25,11 @@ function queueEnv(nextRun: () => unknown = () => null) {
   const statement = {
     first: vi.fn(async () => nextRun()),
   };
+  const queries: string[] = [];
   return {
-    env: { DB: { prepare: vi.fn(() => statement) } } as unknown as Env,
+    env: { DB: { prepare: vi.fn((sql: string) => { queries.push(sql); return statement; }) } } as unknown as Env,
     prepare: (statement as unknown as { first: ReturnType<typeof vi.fn> }).first,
+    queries,
   };
 }
 
@@ -49,6 +51,16 @@ describe("global GPU queue", () => {
     expect(response.status).toBe(202);
     expect(setAlarm).toHaveBeenCalledOnce();
     expect(setAlarm.mock.calls[0][0]).toBeGreaterThan(Date.now() - 1_000);
+  });
+
+  it("keeps non-Modal image tasks out of the GPU queue", async () => {
+    const ctx = queueState();
+    const { env, queries } = queueEnv();
+    const queue = new GpuQueue(ctx.state, env);
+
+    await queue.alarm();
+
+    expect(queries.some((sql) => sql.includes("kind IN ('workflow', 'character')"))).toBe(true);
   });
 
   it("does not expose arbitrary Durable Object paths", async () => {

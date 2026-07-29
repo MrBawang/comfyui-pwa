@@ -92,6 +92,8 @@ function testApp() {
     MODAL_API_URL: "https://luminaflow-studio--comfy-desk-api.modal.run",
     MODAL_API_TOKEN: "secret",
     MODAL_BUDGET_CONFIRMED: "true",
+    WISART_API_URL: "https://wisart.example.com",
+    WISART_API_KEY: "wisart-secret",
   } as unknown as Env;
   return { app, env, db };
 }
@@ -148,6 +150,23 @@ describe("single-use Modal cost approval", () => {
       method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(descriptor),
     }, env);
     expect(response.status).toBe(503);
+  });
+
+  it("allows a WisArt quote without coupling it to the Modal budget", async () => {
+    const { app, env } = testApp();
+    env.MODAL_BUDGET_CONFIRMED = "false";
+    const response = await app.request("/api/cost-quotes", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        action: "wisart-image",
+        target: "wisart:generate:nano-banana-2:auto:auto:1",
+        fileBytes: 0,
+        batchCount: 1,
+      }),
+    }, env);
+    expect(response.status).toBe(201);
+    await expect(response.json()).resolves.toMatchObject({ action: "wisart-image", estimatedMaxUsd: 0 });
   });
 
   it("rejects quotes before creation when the endpoint belongs to another Modal workspace", async () => {
