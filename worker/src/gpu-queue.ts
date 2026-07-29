@@ -41,6 +41,7 @@ interface ModalLlmLease {
 class PermanentRunError extends Error {}
 const LLM_LEASE_KEY = "modal-llm-lease";
 const LLM_LEASE_MS = 15 * 60 * 1_000;
+const LLM_RELEASE_ATTEMPTS = 3;
 
 function quoted(value: string) {
   return value.replace(/[\r\n"]/g, "_");
@@ -108,12 +109,22 @@ export async function acquireModalLlmLease(env: Env) {
   let released = false;
   return async () => {
     if (released) return;
-    released = true;
-    await stub.fetch("https://queue.internal/llm/release", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ leaseId }),
-    });
+    let lastError: unknown;
+    for (let attempt = 0; attempt < LLM_RELEASE_ATTEMPTS; attempt += 1) {
+      try {
+        const releaseResponse = await stub.fetch("https://queue.internal/llm/release", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ leaseId }),
+        });
+        if (!releaseResponse.ok) throw new Error(`Modal GPU lease release failed (${releaseResponse.status})`);
+        released = true;
+        return;
+      } catch (error) {
+        lastError = error;
+      }
+    }
+    throw lastError instanceof Error ? lastError : new Error("Modal GPU lease release failed");
   };
 }
 

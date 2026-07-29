@@ -629,8 +629,7 @@ chatRoutes.post("/api/chat/threads/:threadId/messages", async (c) => {
   const encoder = new TextEncoder();
   const providerAbort = new AbortController();
   const send = (event: string, data: unknown) => writer.write(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
-  // An open response stream keeps the Worker alive while Modal warms and generates.
-  void (async () => {
+  const providerTask = (async () => {
     let assistant = "";
     let modalGenerationStarted = false;
     const providerTimeout = row.provider_id === "modal-qwen36"
@@ -699,6 +698,8 @@ chatRoutes.post("/api/chat/threads/:threadId/messages", async (c) => {
       await writer.close().catch(() => undefined);
     }
   })();
+  // The stream keeps normal generation alive; waitUntil preserves cleanup after a client disconnect.
+  c.executionCtx.waitUntil(providerTask);
   return new Response(abortProviderOnResponseCancel(stream.readable, providerAbort), {
     headers: {
       "content-type": "text/event-stream; charset=utf-8",

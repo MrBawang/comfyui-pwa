@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import type { Env } from "../src/env";
-import { GpuQueue, pinnedWorkflowFields } from "../src/gpu-queue";
+import { acquireModalLlmLease, GpuQueue, pinnedWorkflowFields } from "../src/gpu-queue";
 
 interface QueueState {
   data: Map<string, unknown>;
@@ -125,6 +125,26 @@ describe("global GPU queue", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it("retries an idempotent LLM lease release after a transient failure", async () => {
+    const fetch = vi.fn()
+      .mockResolvedValueOnce(Response.json({ ok: true }, { status: 201 }))
+      .mockRejectedValueOnce(new Error("Durable Object connection reset"))
+      .mockResolvedValueOnce(Response.json({ ok: true }));
+    const env = {
+      GPU_QUEUE: {
+        idFromName: vi.fn(() => "global-id"),
+        get: vi.fn(() => ({ fetch })),
+      },
+    } as unknown as Env;
+
+    const release = await acquireModalLlmLease(env);
+    await release();
+    await release();
+
+    expect(fetch).toHaveBeenCalledTimes(3);
+    expect(fetch.mock.calls.slice(1).every(([url]) => url === "https://queue.internal/llm/release")).toBe(true);
   });
 
   it("defers ComfyUI alarms until the active LLM lease expires", async () => {
