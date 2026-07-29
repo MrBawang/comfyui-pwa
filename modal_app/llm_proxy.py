@@ -15,11 +15,17 @@ from fastapi.responses import JSONResponse, Response, StreamingResponse
 
 UPSTREAM = "http://127.0.0.1:8001"
 MAX_REQUEST_BYTES = 512 * 1024
-MAX_SYSTEM_CHARS = 12_000
+MAX_SYSTEM_CHARS = 32_000
+MAX_SYSTEM_TOKENS = 12_000
 MAX_MESSAGE_CHARS = 20_000
 GPU_PEAK_USED_MIB = 0
 
 app = FastAPI(title="Qwen3.6 Modal API", docs_url=None, redoc_url=None)
+
+
+def _estimated_tokens(content: str) -> int:
+    ascii_characters = sum(ord(character) <= 0x7F for character in content)
+    return (ascii_characters + 3) // 4 + len(content) - ascii_characters
 
 
 def _authorize(request: Request) -> None:
@@ -76,10 +82,16 @@ def _validated_payload(raw: Any) -> dict[str, Any]:
         if not isinstance(item, dict) or item.get("role") not in {"system", "user", "assistant"}:
             raise HTTPException(status_code=400, detail=f"message {index} has an invalid role")
         content = item.get("content")
-        if not isinstance(content, str) or not content or len(content) > MAX_MESSAGE_CHARS:
+        if not isinstance(content, str) or not content:
             raise HTTPException(status_code=400, detail=f"message {index} has invalid content")
-        if item["role"] == "system" and (index != 0 or len(content) > MAX_SYSTEM_CHARS):
-            raise HTTPException(status_code=400, detail="system message must be first and at most 12,000 characters")
+        if item["role"] == "system":
+            if index != 0 or len(content) > MAX_SYSTEM_CHARS or _estimated_tokens(content) > MAX_SYSTEM_TOKENS:
+                raise HTTPException(
+                    status_code=400,
+                    detail="system message must be first, at most 32,000 characters, and about 12,000 tokens",
+                )
+        elif len(content) > MAX_MESSAGE_CHARS:
+            raise HTTPException(status_code=400, detail=f"message {index} has invalid content")
         messages.append({"role": item["role"], "content": content})
     if not messages or messages[0]["role"] != "system":
         raise HTTPException(status_code=400, detail="the first message must be a system message")

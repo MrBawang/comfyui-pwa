@@ -4,6 +4,8 @@ import { test } from "node:test";
 
 const workbenchSource = await readFile(new URL("../web/src/components/workbench.tsx", import.meta.url), "utf8");
 const chatSource = await readFile(new URL("../web/src/components/chat-page.tsx", import.meta.url), "utf8");
+const settingsSource = await readFile(new URL("../web/src/components/more-page.tsx", import.meta.url), "utf8");
+const stylesSource = await readFile(new URL("../web/src/styles.css", import.meta.url), "utf8");
 
 test("an empty workflow library offers a direct Modal catalog sync", () => {
   assert.match(workbenchSource, /同步现有工作流/);
@@ -23,4 +25,10 @@ test("an existing conversation can switch between configured providers", () => {
   assert.match(chatSource, /method: "PATCH"/);
   assert.match(chatSource, /aria-label="当前会话模型"/);
   assert.doesNotMatch(chatSource, /Modal Qwen 保持关闭/);
+});
+
+test("system prompts support 32K characters in a larger editor", () => {
+  assert.match(settingsSource, /MAX_SYSTEM_PROMPT_CHARS = 32_000/);
+  assert.match(settingsSource, /prompt-editor/);
+  assert.match(stylesSource, /\.prompt-settings \.prompt-editor textarea \{ min-height: 320px/);
 });

@@ -44,6 +44,20 @@ class LlmProxyTests(unittest.TestCase):
                 "chat_template_kwargs": ["enable_thinking"],
             })
 
+    def test_accepts_32k_ascii_system_message_within_token_budget(self):
+        payload = _validated_payload({"messages": [
+            {"role": "system", "content": "a" * 32_000},
+            {"role": "user", "content": "hello"},
+        ]})
+
+        self.assertEqual(len(payload["messages"][0]["content"]), 32_000)
+
+    def test_rejects_system_message_over_token_budget(self):
+        with self.assertRaises(HTTPException):
+            _validated_payload({"messages": [
+                {"role": "system", "content": "系" * 12_001},
+            ]})
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -7,6 +7,7 @@ import {
   fitsChatContext,
   modelMessages,
   reserveWorkersAi,
+  systemPromptLimitError,
   workersAiStream,
 } from "../src/chat-routes";
 import type { Env } from "../src/env";
@@ -31,6 +32,12 @@ describe("chat context and streaming", () => {
     expect(result.map((item) => item.content)).toEqual(["系".repeat(10_000), "新".repeat(2_000)]);
     expect(fitsChatContext("系".repeat(10_000), "新".repeat(3_500))).toBe(true);
     expect(fitsChatContext("系".repeat(10_000), "新".repeat(3_501))).toBe(false);
+  });
+
+  it("accepts 32K ASCII system prompts while preserving the token budget", () => {
+    expect(systemPromptLimitError("a".repeat(32_000))).toBeUndefined();
+    expect(systemPromptLimitError("a".repeat(32_001))).toContain("32,000 字符");
+    expect(systemPromptLimitError("系".repeat(12_001))).toContain("12,000 tokens");
   });
 
   it("parses both Workers AI and OpenAI-compatible SSE records", async () => {

@@ -7,6 +7,8 @@ import { AppHeader } from "@/components/app-header";
 import { readJson } from "@/lib/api";
 import type { StoredWorkflow } from "@/lib/workflow-contract";
 
+const MAX_SYSTEM_PROMPT_CHARS = 32_000;
+
 interface StorageStatus {
   usedBytes: number;
   warningBytes: number;
@@ -99,7 +101,7 @@ export function MorePage() {
             <form onSubmit={(event) => void savePrompt(event)}>
               <div className="prompt-form-row"><label><span>名称</span><input value={name} maxLength={80} required onChange={(event) => setName(event.target.value)} /></label><label><span>范围</span><select value={scope} onChange={(event) => setScope(event.target.value as typeof scope)}><option value="prompt">提示词模式</option><option value="chat">日常聊天</option><option value="workflow">指定工作流</option></select></label></div>
               {scope === "workflow" && <label><span>工作流</span><select value={workflowId} required onChange={(event) => setWorkflowId(event.target.value)}><option value="">选择工作流</option>{workflows.map((workflow) => <option key={workflow.id} value={workflow.id}>{workflow.name}</option>)}</select></label>}
-              <label><span>System message</span><textarea value={content} required maxLength={12_000} rows={10} onChange={(event) => setContent(event.target.value)} /></label>
+              <label className="prompt-editor"><span>System message</span><textarea value={content} required maxLength={MAX_SYSTEM_PROMPT_CHARS} rows={16} aria-describedby="system-prompt-count" onChange={(event) => setContent(event.target.value)} /><small id="system-prompt-count">{content.length.toLocaleString()} / {MAX_SYSTEM_PROMPT_CHARS.toLocaleString()} 字符</small></label>
               <label className="prompt-default"><input type="checkbox" checked={isDefault} onChange={(event) => setIsDefault(event.target.checked)} />设为该范围默认</label>
               {error && <p className="form-error" role="alert">{error}</p>}
               <button type="submit"><Plus size={16} />保存新版本</button>

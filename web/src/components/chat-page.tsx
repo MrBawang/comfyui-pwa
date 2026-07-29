@@ -9,6 +9,8 @@ import { readJson } from "@/lib/api";
 import { costHeaders, useCostApproval, type CostApproval } from "@/lib/cost-approval";
 import type { StoredWorkflow } from "@/lib/workflow-contract";
 
+const MAX_SYSTEM_PROMPT_CHARS = 32_000;
+
 interface Provider {
   id: ProviderId;
   label: string;
@@ -298,7 +300,7 @@ export function ChatPage() {
               {selectedWorkflow?.textInputs.length ? <label><span>写入字段</span><select value={targetFieldName} onChange={(event) => setTargetFieldName(event.target.value)}>{selectedWorkflow.textInputs.map((item) => <option key={item.fieldName} value={item.fieldName}>{item.label}</option>)}</select></label> : null}
             </>}
             <label><span>系统提示词</span><select value={promptPresetId} onChange={(event) => setPromptPresetId(event.target.value)}><option value="">使用默认</option>{matchingPrompts.map((prompt) => <option key={prompt.id} value={prompt.id}>{prompt.name} · v{prompt.version}</option>)}</select></label>
-            <details><summary>本会话覆盖</summary><textarea value={systemOverride} maxLength={12_000} rows={5} placeholder="仅覆盖当前新会话" onChange={(event) => setSystemOverride(event.target.value)} /></details>
+            <details><summary>本会话覆盖</summary><textarea value={systemOverride} maxLength={MAX_SYSTEM_PROMPT_CHARS} rows={7} placeholder="仅覆盖当前新会话" onChange={(event) => setSystemOverride(event.target.value)} /></details>
             <button type="button" className="chat-create-button" disabled={creatingThread || availableProviders.length === 0} onClick={() => void createThread()}><MessageSquarePlus size={16} />{creatingThread ? "正在创建" : "创建会话"}</button>
             {error && !active && <p className="form-error" role="alert">{error}</p>}
             {quota && <small className={quota.warning ? "quota quota--warning" : "quota"}>Workers AI 估算 {Math.round(quota.estimatedNeurons).toLocaleString()} / {quota.freeNeurons.toLocaleString()} Neurons{quota.warning ? " · 已达 90%，请手动切换 Modal" : ""}</small>}

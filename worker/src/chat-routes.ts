@@ -6,7 +6,7 @@ import { costTargets } from "../../shared/costs";
 import { consumeCostApproval, CostApprovalError, requireIdempotencyKey } from "./cost-approval";
 import type { UserContext } from "./env";
 import { acquireModalLlmLease } from "./gpu-queue";
-import { MAX_SYSTEM_PROMPT_CHARS, id, jsonError, now, owner } from "./utils";
+import { MAX_SYSTEM_PROMPT_CHARS, MAX_SYSTEM_PROMPT_TOKENS, id, jsonError, now, owner } from "./utils";
 
 interface ThreadRow {
   id: string;
@@ -220,6 +220,14 @@ export function fitsChatContext(system: string, content: string) {
   return estimatedTokens(system) + estimatedTokens(content) <= MAX_INPUT_TOKENS;
 }
 
+export function systemPromptLimitError(content: string) {
+  if (content.length > MAX_SYSTEM_PROMPT_CHARS) return "系统提示词不能超过 32,000 字符";
+  if (estimatedTokens(content) > MAX_SYSTEM_PROMPT_TOKENS) {
+    return "系统提示词超过当前 16K 上下文预算（最多约 12,000 tokens）";
+  }
+  return undefined;
+}
+
 export function modelMessages(system: string, history: MessageRow[]) {
   const limited: Array<{ role: "system" | "user" | "assistant"; content: string }> = [{ role: "system", content: system }];
   let tokens = estimatedTokens(system);
@@ -377,7 +385,9 @@ chatRoutes.post("/api/system-prompts", async (c) => {
   const content = String(body.content ?? "").trim();
   const name = String(body.name ?? "").trim().slice(0, 80);
   const scope = body.scope;
-  if (!name || !content || content.length > MAX_SYSTEM_PROMPT_CHARS) return jsonError(c, "提示词名称或内容不正确");
+  if (!name || !content) return jsonError(c, "提示词名称或内容不正确");
+  const promptLimitError = systemPromptLimitError(content);
+  if (promptLimitError) return jsonError(c, promptLimitError);
   if (!scope || !["chat", "prompt", "workflow"].includes(scope)) return jsonError(c, "提示词范围不正确");
   if (scope === "workflow" && !body.workflowId) return jsonError(c, "工作流提示词必须绑定工作流");
   const promptId = body.id || id();
@@ -414,7 +424,8 @@ chatRoutes.post("/api/chat/threads", async (c) => {
   const providerId = body.providerId ?? (mode === "prompt" && modalAvailable ? "modal-qwen36" : "workers-ai");
   const provider = availableProviders(c).find((item) => item.id === providerId);
   if (!provider?.available) return jsonError(c, `${provider?.label ?? "模型"}尚未配置`, 503);
-  if ((body.systemPromptOverride?.length ?? 0) > MAX_SYSTEM_PROMPT_CHARS) return jsonError(c, "系统提示词不能超过 12,000 字符");
+  const promptLimitError = body.systemPromptOverride ? systemPromptLimitError(body.systemPromptOverride) : undefined;
+  if (promptLimitError) return jsonError(c, promptLimitError);
   let promptVersion = body.systemPromptVersion ?? null;
   let promptPresetId = body.systemPromptPresetId ?? null;
   if (promptPresetId) {
@@ -460,7 +471,8 @@ chatRoutes.patch("/api/chat/threads/:threadId", async (c) => {
   const existing = await ownedThread(c, c.req.param("threadId"));
   if (!existing) return jsonError(c, "对话不存在", 404);
   const body = await c.req.json<Partial<ChatThread>>();
-  if ((body.systemPromptOverride?.length ?? 0) > MAX_SYSTEM_PROMPT_CHARS) return jsonError(c, "系统提示词不能超过 12,000 字符");
+  const promptLimitError = body.systemPromptOverride ? systemPromptLimitError(body.systemPromptOverride) : undefined;
+  if (promptLimitError) return jsonError(c, promptLimitError);
   const providerId = body.providerId ?? existing.provider_id;
   if (!availableProviders(c).find((item) => item.id === providerId)?.available) return jsonError(c, "所选模型尚未配置", 503);
   await c.env.DB.prepare(`UPDATE chat_threads SET title = ?1, provider_id = ?2,

@@ -3,7 +3,8 @@ import type { Context } from "hono";
 import type { Env, UserContext } from "./env";
 
 export const MAX_IMAGE_BYTES = 25 * 1024 * 1024;
-export const MAX_SYSTEM_PROMPT_CHARS = 12_000;
+export const MAX_SYSTEM_PROMPT_CHARS = 32_000;
+export const MAX_SYSTEM_PROMPT_TOKENS = 12_000;
 export const ALLOWED_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 
 export function id() {

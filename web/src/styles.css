@@ -3094,6 +3094,8 @@ a:focus-visible,
 .prompt-settings header p { margin: 5px 0 0; color: var(--muted); font-size: 0.7rem; }
 .prompt-settings form { display: grid; gap: 14px; padding-bottom: 24px; border-bottom: 1px solid var(--border); }
 .prompt-settings form label { display: grid; gap: 6px; color: var(--muted); font-size: 0.68rem; }
+.prompt-settings .prompt-editor textarea { min-height: 320px; max-height: 70svh; }
+.prompt-settings .prompt-editor small { justify-self: end; color: var(--faint); font-variant-numeric: tabular-nums; }
 .prompt-form-row { display: grid; grid-template-columns: 1fr 180px; gap: 12px; }
 .prompt-settings .prompt-default { display: flex; align-items: center; gap: 8px; }
 .prompt-settings .prompt-default input { width: 16px; min-height: 16px; accent-color: var(--primary); }
@@ -3165,6 +3167,7 @@ a:focus-visible,
   .cloud-gallery figcaption { align-items: flex-start; }
   .cloud-gallery figcaption small { line-height: 1.4; }
   .settings-layout { grid-template-columns: 1fr; gap: 26px; padding-top: 16px; }
+  .prompt-settings .prompt-editor textarea { min-height: 240px; max-height: 60svh; }
   .prompt-form-row { grid-template-columns: 1fr; }
   .prompt-list article { grid-template-columns: 1fr; gap: 8px; }
 }
