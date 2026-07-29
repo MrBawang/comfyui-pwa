@@ -42,7 +42,16 @@ npm run db:migrate:remote
 npx wrangler secret put CF_ACCESS_TEAM_DOMAIN
 npx wrangler secret put CF_ACCESS_AUD
 ```
-4. In Cloudflare Workers Builds, keep `main` as the production branch, set the build command to `npm run build`, and use the default deploy command `npx wrangler deploy`. Run `npm run deploy:dry-run` locally, then merge and push to `main`; Cloudflare deploys the commit automatically. Use `npm run deploy` only as an explicit manual fallback.
+4. Create a separate R2 viewer password, store only its lowercase SHA-256 as `R2_BROWSER_PASSWORD_SHA256`, and keep the plaintext outside Git. The hidden entry under “更多 → 私有 R2” issues a 15-minute host-only session after password verification. Five failed attempts lock that Access identity for 15 minutes. The browser is read-only and every list/read still passes through the R2 operation hard stop.
+
+```bash
+read -s R2_BROWSER_PASSWORD
+printf %s "$R2_BROWSER_PASSWORD" | shasum -a 256
+npx wrangler secret put R2_BROWSER_PASSWORD_SHA256
+unset R2_BROWSER_PASSWORD
+```
+
+5. In Cloudflare Workers Builds, keep `main` as the production branch, set the build command to `npm run build`, and use the default deploy command `npx wrangler deploy`. Run `npm run deploy:dry-run` locally, then merge and push to `main`; Cloudflare deploys the commit automatically. Use `npm run deploy` only as an explicit manual fallback.
 
 The Worker warns at 8 GiB and blocks new R2 writes at 9 GiB. It also stops app-managed R2 operations at 800,000 Class A or 8,000,000 Class B per month. Workers AI reserves a worst-case response allowance before each call, forwards browser cancellation to inference, times out after 90 seconds, and hard-stops at 9,000 Neurons per day. No threshold silently changes providers. Workflows are read from D1; only an explicitly approved directory sync wakes the Modal API.
 

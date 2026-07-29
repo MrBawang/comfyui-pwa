@@ -5,6 +5,8 @@ import { test } from "node:test";
 const workbenchSource = await readFile(new URL("../web/src/components/workbench.tsx", import.meta.url), "utf8");
 const chatSource = await readFile(new URL("../web/src/components/chat-page.tsx", import.meta.url), "utf8");
 const settingsSource = await readFile(new URL("../web/src/components/more-page.tsx", import.meta.url), "utf8");
+const storageSource = await readFile(new URL("../web/src/components/storage-browser-page.tsx", import.meta.url), "utf8");
+const routerSource = await readFile(new URL("../web/src/main.tsx", import.meta.url), "utf8");
 const stylesSource = await readFile(new URL("../web/src/styles.css", import.meta.url), "utf8");
 
 test("an empty workflow library offers a direct Modal catalog sync", () => {
@@ -31,4 +33,12 @@ test("system prompts support 32K characters in a larger editor", () => {
   assert.match(settingsSource, /MAX_SYSTEM_PROMPT_CHARS = 32_000/);
   assert.match(settingsSource, /prompt-editor/);
   assert.match(stylesSource, /\.prompt-settings \.prompt-editor textarea \{ min-height: 320px/);
+});
+
+test("the private R2 browser stays outside normal navigation and unlocks from More", () => {
+  assert.match(settingsSource, /R2_BROWSER_PASSWORD|storagePassword|查看 comfyui/);
+  assert.match(routerSource, /path="\/storage"/);
+  assert.match(storageSource, /\/api\/r2-browser\/objects/);
+  assert.match(storageSource, /立即锁定/);
+  assert.doesNotMatch(storageSource, /method: "DELETE"/);
 });

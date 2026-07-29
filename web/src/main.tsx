@@ -6,6 +6,7 @@ import { CharacterProjects } from "@/components/character-projects";
 import { ChatPage } from "@/components/chat-page";
 import { GalleryPage } from "@/components/gallery-page";
 import { MorePage } from "@/components/more-page";
+import { StorageBrowserPage } from "@/components/storage-browser-page";
 import { WorkflowRunner } from "@/components/workflow-runner";
 import { Workbench } from "@/components/workbench";
 import { CostApprovalProvider } from "@/lib/cost-approval";
@@ -31,6 +32,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
           <Route path="/chat" element={<ChatPage />} />
           <Route path="/gallery" element={<GalleryPage />} />
           <Route path="/more" element={<MorePage />} />
+          <Route path="/storage" element={<StorageBrowserPage />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>

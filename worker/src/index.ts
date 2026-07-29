@@ -9,6 +9,7 @@ import type { UserContext } from "./env";
 import { GpuQueue } from "./gpu-queue";
 import { proxyMeteredModal, proxyModal, syncModalWorkflowCache } from "./modal";
 import { r2Delete, R2BudgetError } from "./r2-budget";
+import { storageBrowserRoutes } from "./storage-browser";
 import { cachedWorkflow, cachedWorkflows } from "./workflow-cache";
 import { modalEndpointStatus, owner } from "./utils";
 
@@ -47,6 +48,7 @@ app.all("/api/resources/*", (c) => c.req.method === "POST"
 app.route("/", costRoutes);
 app.route("/", coreRoutes);
 app.route("/", chatRoutes);
+app.route("/", storageBrowserRoutes);
 
 app.get("/api/config", (c) => {
   const modal = modalEndpointStatus(c.env);

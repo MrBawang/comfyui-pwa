@@ -29,6 +29,7 @@ R2 byte and operation counters cover only objects managed through this Worker. B
 | `MODAL_API_URL` | Exactly `https://luminaflow-studio--comfy-desk-api.modal.run`; other Workspace hosts are rejected |
 | `MODAL_API_TOKEN` | Exactly the same value as `COMFY_API_TOKEN` in Modal Secret `comfy-desk-config` |
 | `LORACHEF_AGENT_TOKEN` | Complete output of `openssl rand -hex 32` |
+| `R2_BROWSER_PASSWORD_SHA256` | Lowercase SHA-256 of a separate strong viewer password; store the plaintext password only in your password manager |
 | `MODAL_BUDGET_CONFIRMED` | Set to `true` only after both Modal budgets below are confirmed |
 | Workspace Budget | At most the free credit currently shown by Modal; use `30 USD` only if the dashboard still shows USD 30 |
 | Environment Budget | Equal to or lower than Workspace Budget |
@@ -41,6 +42,7 @@ npx wrangler secret put CF_ACCESS_AUD
 npx wrangler secret put MODAL_API_URL
 npx wrangler secret put MODAL_API_TOKEN
 npx wrangler secret put LORACHEF_AGENT_TOKEN
+npx wrangler secret put R2_BROWSER_PASSWORD_SHA256
 npx wrangler secret put MODAL_BUDGET_CONFIRMED
 ```
 

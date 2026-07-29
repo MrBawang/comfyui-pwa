@@ -15,6 +15,7 @@ export interface Env {
   MODAL_LLM_URL?: string;
   MODAL_LLM_TOKEN?: string;
   LORACHEF_AGENT_TOKEN?: string;
+  R2_BROWSER_PASSWORD_SHA256?: string;
   WORKERS_AI_MODEL: string;
   STORAGE_WARNING_BYTES: string;
   STORAGE_STOP_BYTES: string;

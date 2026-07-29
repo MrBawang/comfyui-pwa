@@ -1,6 +1,6 @@
-import { Bot, Database, ExternalLink, HardDrive, Plus, Workflow } from "lucide-react";
+import { Bot, ChevronRight, Database, ExternalLink, HardDrive, LockKeyhole, Plus, Workflow } from "lucide-react";
 import { FormEvent, useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 
 import type { SystemPromptPreset } from "@shared/contracts";
 import { AppHeader } from "@/components/app-header";
@@ -33,6 +33,7 @@ interface AgentStatus {
 }
 
 export function MorePage() {
+  const navigate = useNavigate();
   const [prompts, setPrompts] = useState<SystemPromptPreset[]>([]);
   const [workflows, setWorkflows] = useState<StoredWorkflow[]>([]);
   const [storage, setStorage] = useState<StorageStatus>();
@@ -44,6 +45,10 @@ export function MorePage() {
   const [content, setContent] = useState("");
   const [isDefault, setIsDefault] = useState(true);
   const [error, setError] = useState<string>();
+  const [storageUnlockOpen, setStorageUnlockOpen] = useState(false);
+  const [storagePassword, setStoragePassword] = useState("");
+  const [storageUnlocking, setStorageUnlocking] = useState(false);
+  const [storageUnlockError, setStorageUnlockError] = useState<string>();
   const modalReady = Boolean(config?.modalConfigured && config.modalEndpointValid && config.modalBudgetConfirmed);
 
   async function load() {
@@ -84,6 +89,48 @@ export function MorePage() {
     await load();
   }
 
+  async function openStorageUnlock() {
+    setStorageUnlockError(undefined);
+    if (storageUnlockOpen) {
+      setStorageUnlockOpen(false);
+      setStoragePassword("");
+      return;
+    }
+    try {
+      const response = await fetch("/api/r2-browser/session", { cache: "no-store" });
+      const body = await readJson<{ configured: boolean; unlocked: boolean }>(response, "R2 查看状态读取失败");
+      if (body.unlocked) {
+        navigate("/storage");
+        return;
+      }
+      setStorageUnlockOpen(true);
+      if (!body.configured) setStorageUnlockError("R2 查看密码尚未配置");
+    } catch (storageError) {
+      setStorageUnlockOpen(true);
+      setStorageUnlockError(storageError instanceof Error ? storageError.message : "R2 查看状态读取失败");
+    }
+  }
+
+  async function unlockStorage(event: FormEvent) {
+    event.preventDefault();
+    setStorageUnlocking(true);
+    setStorageUnlockError(undefined);
+    try {
+      const response = await fetch("/api/r2-browser/unlock", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ password: storagePassword }),
+      });
+      await readJson(response, "R2 解锁失败");
+      setStoragePassword("");
+      navigate("/storage");
+    } catch (unlockError) {
+      setStorageUnlockError(unlockError instanceof Error ? unlockError.message : "R2 解锁失败");
+    } finally {
+      setStorageUnlocking(false);
+    }
+  }
+
   return (
     <div className="app-shell">
       <AppHeader isMock={false} />
@@ -92,7 +139,7 @@ export function MorePage() {
         <div className="settings-layout">
           <section className="settings-navigation">
             <Link to="/workflows"><Workflow size={20} /><span><strong>工作流库</strong><small>上传、检查、安装资源与保存版本</small></span><ExternalLink size={16} /></Link>
-            <div><Database size={20} /><span><strong>私有 R2</strong><small>{storage ? <>{(storage.usedBytes / 1024 / 1024 / 1024).toFixed(2)} / {(storage.stopBytes / 1024 / 1024 / 1024).toFixed(1)} GiB<br />A {storage.operations.classA.toLocaleString()} / {storage.operations.classAStop.toLocaleString()} · B {storage.operations.classB.toLocaleString()} / {storage.operations.classBStop.toLocaleString()}</> : "正在读取"}</small></span>{storage && <i className={storage.blocked ? "is-danger" : storage.usedBytes >= storage.warningBytes ? "is-warning" : "is-good"} />}</div>
+            <div className={`settings-storage-entry${storageUnlockOpen ? " is-open" : ""}`}><button type="button" className="settings-navigation__row" aria-expanded={storageUnlockOpen} onClick={() => void openStorageUnlock()}><Database size={20} /><span><strong>私有 R2</strong><small>{storage ? <>{(storage.usedBytes / 1024 / 1024 / 1024).toFixed(2)} / {(storage.stopBytes / 1024 / 1024 / 1024).toFixed(1)} GiB<br />A {storage.operations.classA.toLocaleString()} / {storage.operations.classAStop.toLocaleString()} · B {storage.operations.classB.toLocaleString()} / {storage.operations.classBStop.toLocaleString()}</> : "正在读取"}</small></span><span className="settings-storage-state">{storage && <i className={storage.blocked ? "is-danger" : storage.usedBytes >= storage.warningBytes ? "is-warning" : "is-good"} />}<ChevronRight className="settings-storage-chevron" size={17} /></span></button>{storageUnlockOpen && <form className="settings-storage-unlock" onSubmit={(event) => void unlockStorage(event)}><label><span><LockKeyhole size={15} />查看密码</span><input type="password" value={storagePassword} maxLength={256} autoComplete="current-password" autoFocus required onChange={(event) => setStoragePassword(event.target.value)} /></label>{storageUnlockError && <p className="form-error" role="alert">{storageUnlockError}</p>}<button type="submit" disabled={storageUnlocking}>{storageUnlocking ? "正在验证" : "查看 comfyui"}</button><small>解锁 15 分钟，仅提供预览和下载。</small></form>}</div>
             <div><Bot size={20} /><span><strong>云端服务</strong><small>Workers AI · {config?.workersAiModel || "读取中"}<br />Modal Workspace · {config?.modalWorkspace || "未配置"}<br />ComfyUI · {config ? !config.modalConfigured ? "未配置" : !config.modalEndpointValid ? "地址校验失败，已锁定" : !config.modalBudgetConfirmed ? "预算未确认，已锁定" : "已就绪" : "读取中"}<br />Qwen3.6 · {config ? config.modalLlmConfigured ? "已配置" : "第二阶段，未部署" : "读取中"}</small></span>{config && <i className={modalReady ? "is-good" : "is-warning"} />}</div>
             <div><HardDrive size={20} /><span><strong>PC LoRAChef Agent</strong><small>{!agent ? "正在读取" : agent.status === "online" ? `${agent.agentId || "Agent"} 在线` : agent.lastSeenAt ? `离线 · 上次在线 ${new Date(agent.lastSeenAt).toLocaleString("zh-CN")}` : "离线 · 尚未连接"}</small></span>{agent && <i className={agent.status === "online" ? "is-good" : "is-warning"} />}</div>
           </section>

@@ -48,6 +48,7 @@ for (const name of [
   "MODAL_API_URL",
   "MODAL_API_TOKEN",
   "LORACHEF_AGENT_TOKEN",
+  "R2_BROWSER_PASSWORD_SHA256",
   "MODAL_BUDGET_CONFIRMED",
 ]) {
   check(name, configured(name), configured(name) ? ".dev.vars or process environment" : "missing locally; production uses Worker Secret");

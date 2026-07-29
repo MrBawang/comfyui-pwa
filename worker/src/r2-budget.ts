@@ -40,9 +40,9 @@ async function reserveR2Operations(env: Env, classA: number, classB: number) {
   }
 }
 
-export async function r2Get(env: Env, key: string) {
+export async function r2Get(env: Env, key: string, options?: R2GetOptions) {
   await reserveR2Operations(env, 0, 1);
-  return env.ASSETS_BUCKET.get(key);
+  return options ? env.ASSETS_BUCKET.get(key, options) : env.ASSETS_BUCKET.get(key);
 }
 
 export async function r2Head(env: Env, key: string) {
@@ -60,4 +60,9 @@ export async function r2Delete(env: Env, keys: string | string[]) {
   if (!count) return;
   await reserveR2Operations(env, count, 0);
   await env.ASSETS_BUCKET.delete(keys);
+}
+
+export async function r2List(env: Env, options?: R2ListOptions) {
+  await reserveR2Operations(env, 1, 0);
+  return options ? env.ASSETS_BUCKET.list(options) : env.ASSETS_BUCKET.list();
 }

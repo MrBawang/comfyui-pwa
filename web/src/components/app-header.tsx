@@ -52,7 +52,9 @@ export function AppHeader({ isMock }: { isMock: boolean }) {
         </Link>
         <nav className="primary-nav" aria-label="主要导航">
           {navigation.map(({ to, label, desktopLabel, icon: Icon, secondary }) => {
-            const active = to === "/" ? pathname === "/" : pathname.startsWith(to);
+            const active = to === "/"
+              ? pathname === "/"
+              : pathname.startsWith(to) || (to === "/more" && pathname.startsWith("/storage"));
             return (
               <Link
                 key={to}

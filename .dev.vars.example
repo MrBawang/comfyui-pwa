@@ -17,6 +17,10 @@ MODAL_BUDGET_CONFIRMED=false
 # Shared only with the pull-based PC LoRAChef Agent.
 LORACHEF_AGENT_TOKEN=replace-with-a-third-long-random-value
 
+# SHA-256 hex of the separate password used to reveal the read-only comfyui R2 browser.
+# Never store the plaintext password here or in Git.
+# R2_BROWSER_PASSWORD_SHA256=replace-with-64-lowercase-hex-characters
+
 # Stage 2 only; leave unset for the initial deployment.
 # MODAL_LLM_URL=https://your-workspace--lorachef-qwen36-qwenserver-serve.modal.run
 # MODAL_LLM_TOKEN=replace-with-a-different-long-random-value
