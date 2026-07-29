@@ -49,6 +49,7 @@ export function ChatPage() {
   const [systemOverride, setSystemOverride] = useState("");
   const [input, setInput] = useState("");
   const [creatingThread, setCreatingThread] = useState(false);
+  const [updatingProvider, setUpdatingProvider] = useState(false);
   const [streaming, setStreaming] = useState(false);
   const [error, setError] = useState<string>();
   const [quota, setQuota] = useState<{
@@ -236,6 +237,30 @@ export function ChatPage() {
     }
   }
 
+  async function changeActiveProvider(nextProviderId: ProviderId) {
+    if (!active || nextProviderId === active.providerId || updatingProvider || streaming) return;
+    const selectedProvider = providers.find((provider) => provider.id === nextProviderId);
+    if (!selectedProvider?.available) {
+      setError(`${selectedProvider?.label ?? "模型"}尚未配置`);
+      return;
+    }
+    setUpdatingProvider(true);
+    setError(undefined);
+    try {
+      const response = await fetch(`/api/chat/threads/${active.id}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ providerId: nextProviderId }),
+      });
+      const updated = await readJson<ChatThread>(response, "模型切换失败");
+      setThreads((current) => current.map((item) => item.id === updated.id ? updated : item));
+    } catch (updateError) {
+      setError(updateError instanceof Error ? updateError.message : "模型切换失败");
+    } finally {
+      setUpdatingProvider(false);
+    }
+  }
+
   async function deleteThread(threadId: string) {
     if (!window.confirm("删除这个对话及其消息？")) return;
     await fetch(`/api/chat/threads/${threadId}`, { method: "DELETE" });
@@ -283,9 +308,12 @@ export function ChatPage() {
           </div>
         </aside>
         <section className="conversation" aria-live="polite">
-          {!active && <div className="conversation-empty"><MessageSquarePlus size={28} /><strong>开始使用 AI</strong><p>日常聊天和提示词生成现在都可以直接使用 Workers AI，Modal Qwen 保持关闭。</p><div className="conversation-empty__actions"><button type="button" disabled={!workersAiAvailable || creatingThread} onClick={() => void createThread({ mode: "chat", providerId: "workers-ai" })}><MessageSquarePlus size={16} />开始聊天</button><button type="button" disabled={!workersAiAvailable || creatingThread} onClick={() => void createThread({ mode: "prompt", providerId: "workers-ai" })}><Sparkles size={16} />生成提示词</button></div></div>}
+          {!active && <div className="conversation-empty"><MessageSquarePlus size={28} /><strong>开始使用 AI</strong><p>{modalQwenAvailable ? "Workers AI 与 Modal Qwen 已就绪。" : "Workers AI 已就绪。"}</p><div className="conversation-empty__actions"><button type="button" disabled={!workersAiAvailable || creatingThread} onClick={() => void createThread({ mode: "chat", providerId: "workers-ai" })}><MessageSquarePlus size={16} />开始聊天</button><button type="button" disabled={!workersAiAvailable || creatingThread} onClick={() => void createThread({ mode: "prompt", providerId: "workers-ai" })}><Sparkles size={16} />生成提示词</button></div></div>}
           {active && <>
-            <header className="conversation-heading"><div><h2>{active.title}</h2><p>{active.providerId === "workers-ai" ? "Workers AI" : "Qwen3.6 · Modal"}{active.workflowId ? " · 已绑定工作流" : ""}</p></div></header>
+            <header className="conversation-heading">
+              <div><h2>{active.title}</h2><p>{active.mode === "prompt" ? "提示词" : "日常聊天"}{active.workflowId ? " · 已绑定工作流" : ""}</p></div>
+              <label className="conversation-provider"><span className="sr-only">当前会话模型</span><select aria-label="当前会话模型" value={active.providerId} disabled={updatingProvider || streaming} onChange={(event) => void changeActiveProvider(event.target.value as ProviderId)}>{providers.map((provider) => <option key={provider.id} value={provider.id} disabled={!provider.available}>{provider.label}{provider.available ? "" : " · 未配置"}</option>)}</select></label>
+            </header>
             <div className="message-list">
               {messages.length === 0 && <div className="conversation-empty"><strong>{active.mode === "prompt" ? "描述你想得到的画面" : "开始对话"}</strong><p>{active.mode === "prompt" ? "结果可以直接写入已绑定的工作流字段。" : "对话会安全保存在当前 Cloudflare 账户。"}</p></div>}
               {messages.map((item) => <article key={item.id} className={`message message--${item.role}`}><header><span>{item.role === "user" ? "你" : item.providerId === "modal-qwen36" ? "Qwen3.6" : "AI"}</span>{item.role === "assistant" && item.content && <div><button type="button" title="复制" onClick={() => void navigator.clipboard.writeText(item.content)}><Copy size={15} /></button>{active.mode === "prompt" && active.workflowId && active.targetFieldName && <button type="button" title="用于运行" onClick={() => useForRun(item)}><Play size={15} /></button>}</div>}</header><p>{item.content || <span className="typing-indicator"><i /><i /><i /></span>}</p></article>)}

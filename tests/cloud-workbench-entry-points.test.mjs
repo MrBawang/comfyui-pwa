@@ -17,3 +17,10 @@ test("first-use chat exposes Workers AI chat and prompt actions", () => {
   assert.match(chatSource, /createThread\(\{ mode: "chat", providerId: "workers-ai" \}\)/);
   assert.match(chatSource, /createThread\(\{ mode: "prompt", providerId: "workers-ai" \}\)/);
 });
+
+test("an existing conversation can switch between configured providers", () => {
+  assert.match(chatSource, /async function changeActiveProvider/);
+  assert.match(chatSource, /method: "PATCH"/);
+  assert.match(chatSource, /aria-label="当前会话模型"/);
+  assert.doesNotMatch(chatSource, /Modal Qwen 保持关闭/);
+});

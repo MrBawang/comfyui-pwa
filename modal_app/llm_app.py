@@ -43,8 +43,8 @@ server_image = (
     .run_commands(
         "git clone --filter=blob:none https://github.com/ggml-org/llama.cpp /opt/llama.cpp",
         f"git -C /opt/llama.cpp checkout {LLAMA_CPP_COMMIT}",
-        "cmake -S /opt/llama.cpp -B /opt/llama.cpp/build -DGGML_CUDA=ON -DLLAMA_CURL=OFF -DLLAMA_BUILD_TESTS=OFF -DLLAMA_BUILD_EXAMPLES=OFF -DCMAKE_BUILD_TYPE=Release",
-        "cmake --build /opt/llama.cpp/build --config Release -j 4 --target llama-server",
+        "cmake -S /opt/llama.cpp -B /opt/llama.cpp/build -DGGML_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES=89 -DLLAMA_CURL=OFF -DLLAMA_BUILD_TESTS=OFF -DLLAMA_BUILD_EXAMPLES=OFF -DCMAKE_BUILD_TYPE=Release",
+        "ln -sf /usr/local/cuda/lib64/stubs/libcuda.so /usr/local/cuda/lib64/stubs/libcuda.so.1 && LIBRARY_PATH=/usr/local/cuda/lib64/stubs LD_LIBRARY_PATH=/usr/local/cuda/lib64/stubs cmake --build /opt/llama.cpp/build --config Release -j 4 --target llama-server",
     )
     .uv_pip_install(
         "fastapi==0.115.4",
