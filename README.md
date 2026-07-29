@@ -35,7 +35,7 @@ npx wrangler r2 bucket info comfyui
 npm run db:migrate:remote
 ```
 
-2. Store `MODAL_API_URL`, `MODAL_API_TOKEN`, and `LORACHEF_AGENT_TOKEN` with `wrangler secret put`. Leave all Modal Qwen values unset in Stage 1. After confirming the Modal Workspace and Environment hard budgets, set the Worker Secret `MODAL_BUDGET_CONFIRMED` to exactly `true`; without it, every Modal quote and submission is locked.
+2. `wrangler.jsonc` locks ComfyUI to the `luminaflow-studio` Workspace. Store `MODAL_API_URL=https://luminaflow-studio--comfy-desk-api.modal.run`, `MODAL_API_TOKEN`, and `LORACHEF_AGENT_TOKEN` with `wrangler secret put`. A URL from another Workspace is rejected before a cost quote is created. Leave all Modal Qwen values unset in Stage 1. After confirming the Modal Workspace and Environment hard budgets, set the Worker Secret `MODAL_BUDGET_CONFIRMED` to exactly `true`; without it, every Modal quote and submission is locked.
 3. Protect the complete custom domain with Cloudflare Access. Configure `CF_ACCESS_TEAM_DOMAIN` (for example `team.cloudflareaccess.com`) and the application's audience tag as `CF_ACCESS_AUD` on the Worker. Production API requests verify the Access JWT and do not trust a caller-supplied email header by itself. Do not leave asset paths outside the Access application.
 
 ```bash
@@ -44,7 +44,7 @@ npx wrangler secret put CF_ACCESS_AUD
 ```
 4. In Cloudflare Workers Builds, keep `main` as the production branch, set the build command to `npm run build`, and use the default deploy command `npx wrangler deploy`. Run `npm run deploy:dry-run` locally, then merge and push to `main`; Cloudflare deploys the commit automatically. Use `npm run deploy` only as an explicit manual fallback.
 
-The Worker warns at 8 GiB and blocks new R2 writes at 9 GiB. It also stops app-managed R2 operations at 800,000 Class A or 8,000,000 Class B per month. Workers AI reserves a worst-case response allowance before each call and hard-stops at 9,000 Neurons per day. No threshold silently changes providers. Workflows are read from D1; only an explicitly approved directory sync wakes the Modal API.
+The Worker warns at 8 GiB and blocks new R2 writes at 9 GiB. It also stops app-managed R2 operations at 800,000 Class A or 8,000,000 Class B per month. Workers AI reserves a worst-case response allowance before each call, forwards browser cancellation to inference, times out after 90 seconds, and hard-stops at 9,000 Neurons per day. No threshold silently changes providers. Workflows are read from D1; only an explicitly approved directory sync wakes the Modal API.
 
 These counters cover only operations routed through this Worker. Confirm before deployment that no other application continuously writes to the shared `comfyui` bucket; external R2 or Modal usage is outside this application's budget controls. Keep Workers and Zero Trust on Free and R2 on Standard so Cloudflare rejects over-quota operations instead of moving the application to paid capacity.
 

@@ -252,14 +252,7 @@ async function providerStream(
 ) {
   const maxTokens = row.mode === "prompt" ? 1_024 : 2_048;
   if (row.provider_id === "workers-ai") {
-    const result = await c.env.AI.run(c.env.WORKERS_AI_MODEL, {
-      messages,
-      stream: true,
-      max_tokens: maxTokens,
-      temperature: row.mode === "prompt" ? 0.55 : 0.7,
-    });
-    if (!(result instanceof ReadableStream)) throw new Error("Workers AI 没有返回流式响应");
-    return result as ReadableStream<Uint8Array>;
+    return workersAiStream(c.env, messages, maxTokens, row.mode === "prompt" ? 0.55 : 0.7, signal);
   }
   if (!c.env.MODAL_LLM_URL || !c.env.MODAL_LLM_TOKEN) throw new Error("Modal Qwen3.6 尚未部署");
   const url = c.env.MODAL_LLM_URL.replace(/\/$/, "");
@@ -281,6 +274,23 @@ async function providerStream(
   });
   if (!response.ok || !response.body) throw new Error(`Modal Qwen3.6 请求失败（${response.status}）`);
   return response.body;
+}
+
+export async function workersAiStream(
+  env: UserContext["Bindings"],
+  messages: Array<{ role: string; content: string }>,
+  maxTokens: number,
+  temperature: number,
+  signal: AbortSignal,
+) {
+  const result = await env.AI.run(env.WORKERS_AI_MODEL, {
+    messages,
+    stream: true,
+    max_tokens: maxTokens,
+    temperature,
+  }, { signal });
+  if (!(result instanceof ReadableStream)) throw new Error("Workers AI 没有返回流式响应");
+  return result as ReadableStream<Uint8Array>;
 }
 
 export function abortProviderOnResponseCancel(source: ReadableStream<Uint8Array>, controller: AbortController) {
@@ -561,9 +571,9 @@ chatRoutes.post("/api/chat/threads/:threadId/messages", async (c) => {
   const send = (event: string, data: unknown) => writer.write(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
   c.executionCtx.waitUntil((async () => {
     let assistant = "";
-    const leaseTimeout = releaseModalGpu
+    const providerTimeout = row.provider_id === "modal-qwen36"
       ? setTimeout(() => providerAbort.abort(new Error("Modal Qwen3.6 请求超过 GPU 租约时限")), 14 * 60 * 1_000)
-      : undefined;
+      : setTimeout(() => providerAbort.abort(new Error("Workers AI 请求超过 90 秒，已停止等待")), 90 * 1_000);
     try {
       const source = await providerStream(c, row, providerMessages, providerAbort.signal);
       await consumeProviderStream(source, async (delta) => {
@@ -612,7 +622,7 @@ chatRoutes.post("/api/chat/threads/:threadId/messages", async (c) => {
       }
       await send("error", { message: error instanceof Error ? error.message : "模型请求失败" }).catch(() => undefined);
     } finally {
-      if (leaseTimeout !== undefined) clearTimeout(leaseTimeout);
+      clearTimeout(providerTimeout);
       await releaseModalGpu?.().catch(() => undefined);
       await releaseWorkersAiReservation(c.env, owner(c), workersReservation).catch(() => undefined);
       await writer.close().catch(() => undefined);

@@ -22,8 +22,35 @@ export function jsonError(c: Context, message: string, status = 400) {
   return c.json({ message }, status as 400);
 }
 
+export interface ModalEndpointStatus {
+  workspace: string;
+  configured: boolean;
+  valid: boolean;
+}
+
+export function modalEndpointStatus(env: Env): ModalEndpointStatus {
+  const workspace = String(env.MODAL_WORKSPACE ?? "").trim();
+  const configured = Boolean(env.MODAL_API_URL && env.MODAL_API_TOKEN);
+  if (!workspace || !env.MODAL_API_URL) return { workspace, configured, valid: false };
+  try {
+    const url = new URL(env.MODAL_API_URL);
+    const expectedHost = `${workspace}--comfy-desk-api.modal.run`;
+    const valid = url.protocol === "https:"
+      && url.hostname === expectedHost
+      && (url.pathname === "/" || url.pathname === "")
+      && !url.search
+      && !url.hash;
+    return { workspace, configured, valid };
+  } catch {
+    return { workspace, configured, valid: false };
+  }
+}
+
 export function modalBase(env: Env) {
+  const status = modalEndpointStatus(env);
+  if (!status.workspace) throw new Error("尚未配置 MODAL_WORKSPACE");
   if (!env.MODAL_API_URL) throw new Error("尚未配置 MODAL_API_URL");
+  if (!status.valid) throw new Error(`Modal 地址不属于已锁定的 ${status.workspace} Workspace`);
   return env.MODAL_API_URL.replace(/\/$/, "");
 }
 

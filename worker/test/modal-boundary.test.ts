@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { Env } from "../src/env";
-import { modalHeaders, safeResponseMessage } from "../src/utils";
+import { modalBase, modalEndpointStatus, modalHeaders, safeResponseMessage } from "../src/utils";
 
 describe("Modal proxy boundary", () => {
   it("forwards only bounded content metadata and replaces caller credentials", () => {
@@ -20,6 +20,20 @@ describe("Modal proxy boundary", () => {
     expect(headers.has("cookie")).toBe(false);
     expect(headers.has("cf-access-jwt-assertion")).toBe(false);
     expect(headers.has("x-cost-approval")).toBe(false);
+  });
+
+  it("accepts only the configured ComfyUI endpoint in the locked workspace", () => {
+    const valid = {
+      MODAL_WORKSPACE: "luminaflow-studio",
+      MODAL_API_URL: "https://luminaflow-studio--comfy-desk-api.modal.run/",
+      MODAL_API_TOKEN: "secret",
+    } as Env;
+    const mismatched = { ...valid, MODAL_API_URL: "https://mrbawang--comfy-desk-api.modal.run" };
+
+    expect(modalEndpointStatus(valid)).toMatchObject({ workspace: "luminaflow-studio", configured: true, valid: true });
+    expect(modalBase(valid)).toBe("https://luminaflow-studio--comfy-desk-api.modal.run");
+    expect(modalEndpointStatus(mismatched).valid).toBe(false);
+    expect(() => modalBase(mismatched)).toThrow("不属于已锁定的 luminaflow-studio Workspace");
   });
 
   it("caps a remote error body before turning it into a message", async () => {

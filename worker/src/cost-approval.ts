@@ -3,7 +3,7 @@ import type { Context } from "hono";
 
 import { COST_ACTIONS, type CostAction, type CostDescriptor, type CostQuote } from "../../shared/costs";
 import type { UserContext } from "./env";
-import { id, jsonError, now, owner } from "./utils";
+import { id, jsonError, modalBase, now, owner } from "./utils";
 
 const QUOTE_LIFETIME_MS = 15 * 60 * 1_000;
 const APPROVAL_LIFETIME_MS = 5 * 60 * 1_000;
@@ -139,6 +139,11 @@ function providerConfigured(c: Context<UserContext>, action: CostAction) {
   }
   if (!c.env.MODAL_API_URL || !c.env.MODAL_API_TOKEN) {
     throw new CostApprovalError("Modal ComfyUI 尚未配置", 503);
+  }
+  try {
+    modalBase(c.env);
+  } catch (error) {
+    throw new CostApprovalError(error instanceof Error ? error.message : "Modal Workspace 校验失败", 503);
   }
 }
 

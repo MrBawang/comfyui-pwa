@@ -10,7 +10,7 @@ import { GpuQueue } from "./gpu-queue";
 import { proxyMeteredModal, proxyModal, syncModalWorkflowCache } from "./modal";
 import { r2Delete, R2BudgetError } from "./r2-budget";
 import { cachedWorkflow, cachedWorkflows } from "./workflow-cache";
-import { owner } from "./utils";
+import { modalEndpointStatus, owner } from "./utils";
 
 const app = new Hono<UserContext>();
 
@@ -20,13 +20,18 @@ app.use("/api/*", async (c, next) => {
   return requireUser(c, next);
 });
 
-app.get("/api/health", (c) => c.json({
-  status: "ready",
-  app: "LoRAChef Studio Worker",
-  modalConfigured: Boolean(c.env.MODAL_API_URL && c.env.MODAL_API_TOKEN),
-  modalBudgetConfirmed: c.env.MODAL_BUDGET_CONFIRMED === "true",
-  canRollbackRuntime: false,
-}));
+app.get("/api/health", (c) => {
+  const modal = modalEndpointStatus(c.env);
+  return c.json({
+    status: "ready",
+    app: "LoRAChef Studio Worker",
+    modalConfigured: modal.configured,
+    modalWorkspace: modal.workspace,
+    modalEndpointValid: modal.valid,
+    modalBudgetConfirmed: c.env.MODAL_BUDGET_CONFIRMED === "true",
+    canRollbackRuntime: false,
+  });
+});
 app.get("/api/workflows", async (c) => c.json({ workflows: await cachedWorkflows(c.env, owner(c)) }));
 app.post("/api/workflows", (c) => proxyMeteredModal(c, "/workflows"));
 app.post("/api/workflows/sync", (c) => syncModalWorkflowCache(c));
@@ -43,14 +48,19 @@ app.route("/", costRoutes);
 app.route("/", coreRoutes);
 app.route("/", chatRoutes);
 
-app.get("/api/config", (c) => c.json({
-  app: "LoRAChef Studio",
-  environment: c.env.APP_ENV,
-  modalConfigured: Boolean(c.env.MODAL_API_URL && c.env.MODAL_API_TOKEN),
-  modalBudgetConfirmed: c.env.MODAL_BUDGET_CONFIRMED === "true",
-  modalLlmConfigured: Boolean(c.env.MODAL_LLM_URL && c.env.MODAL_LLM_TOKEN),
-  workersAiModel: c.env.WORKERS_AI_MODEL,
-}));
+app.get("/api/config", (c) => {
+  const modal = modalEndpointStatus(c.env);
+  return c.json({
+    app: "LoRAChef Studio",
+    environment: c.env.APP_ENV,
+    modalConfigured: modal.configured,
+    modalWorkspace: modal.workspace,
+    modalEndpointValid: modal.valid,
+    modalBudgetConfirmed: c.env.MODAL_BUDGET_CONFIRMED === "true",
+    modalLlmConfigured: Boolean(c.env.MODAL_LLM_URL && c.env.MODAL_LLM_TOKEN),
+    workersAiModel: c.env.WORKERS_AI_MODEL,
+  });
+});
 
 app.notFound((c) => {
   if (c.req.path.startsWith("/api/")) return c.json({ message: "接口不存在" }, 404);

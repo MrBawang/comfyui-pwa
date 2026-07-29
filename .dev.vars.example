@@ -7,7 +7,8 @@ DEV_USER_EMAIL=you@example.com
 # CF_ACCESS_AUD=your-access-application-audience-tag
 
 # Existing ComfyUI Modal ASGI endpoint and its COMFY_API_TOKEN.
-MODAL_API_URL=https://your-workspace--comfy-desk-api.modal.run
+# The non-secret MODAL_WORKSPACE lock is defined in wrangler.jsonc.
+MODAL_API_URL=https://luminaflow-studio--comfy-desk-api.modal.run
 MODAL_API_TOKEN=replace-with-a-long-random-value
 
 # Set to true only after manually confirming Workspace and Environment hard budgets.

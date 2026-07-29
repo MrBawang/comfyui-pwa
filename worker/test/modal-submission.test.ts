@@ -64,7 +64,8 @@ describe("ambiguous Modal submissions", () => {
     };
     const env = {
       DB: db,
-      MODAL_API_URL: "https://modal.example",
+      MODAL_WORKSPACE: "luminaflow-studio",
+      MODAL_API_URL: "https://luminaflow-studio--comfy-desk-api.modal.run",
       MODAL_API_TOKEN: "secret",
       MODAL_BUDGET_CONFIRMED: "true",
     } as unknown as Env;

@@ -60,6 +60,7 @@
 	},
 	"vars": {
 		"APP_ENV": "production",
+		"MODAL_WORKSPACE": "luminaflow-studio",
 		"WORKERS_AI_MODEL": "@cf/qwen/qwen3-30b-a3b-fp8",
 		"STORAGE_WARNING_BYTES": "8589934592",
 		"STORAGE_STOP_BYTES": "9663676416",

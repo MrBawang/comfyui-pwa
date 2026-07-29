@@ -19,6 +19,8 @@ interface CloudConfig {
   modalConfigured: boolean;
   modalLlmConfigured: boolean;
   modalBudgetConfirmed: boolean;
+  modalWorkspace: string;
+  modalEndpointValid: boolean;
   workersAiModel: string;
 }
 
@@ -40,6 +42,7 @@ export function MorePage() {
   const [content, setContent] = useState("");
   const [isDefault, setIsDefault] = useState(true);
   const [error, setError] = useState<string>();
+  const modalReady = Boolean(config?.modalConfigured && config.modalEndpointValid && config.modalBudgetConfirmed);
 
   async function load() {
     const [promptResponse, workflowResponse, storageResponse, configResponse, agentResponse] = await Promise.all([
@@ -88,7 +91,7 @@ export function MorePage() {
           <section className="settings-navigation">
             <Link to="/workflows"><Workflow size={20} /><span><strong>工作流库</strong><small>上传、检查、安装资源与保存版本</small></span><ExternalLink size={16} /></Link>
             <div><Database size={20} /><span><strong>私有 R2</strong><small>{storage ? <>{(storage.usedBytes / 1024 / 1024 / 1024).toFixed(2)} / {(storage.stopBytes / 1024 / 1024 / 1024).toFixed(1)} GiB<br />A {storage.operations.classA.toLocaleString()} / {storage.operations.classAStop.toLocaleString()} · B {storage.operations.classB.toLocaleString()} / {storage.operations.classBStop.toLocaleString()}</> : "正在读取"}</small></span>{storage && <i className={storage.blocked ? "is-danger" : storage.usedBytes >= storage.warningBytes ? "is-warning" : "is-good"} />}</div>
-            <div><Bot size={20} /><span><strong>模型服务</strong><small>Workers AI · {config?.workersAiModel || "读取中"}<br />Modal · {config ? !config.modalConfigured ? "未配置" : config.modalBudgetConfirmed ? "预算已确认" : "预算未确认，已锁定" : "读取中"}<br />Qwen3.6 · {config ? config.modalLlmConfigured ? "已配置" : "未部署" : "读取中"}</small></span>{config && <i className={config.modalConfigured && config.modalBudgetConfirmed ? "is-good" : "is-warning"} />}</div>
+            <div><Bot size={20} /><span><strong>云端服务</strong><small>Workers AI · {config?.workersAiModel || "读取中"}<br />Modal Workspace · {config?.modalWorkspace || "未配置"}<br />ComfyUI · {config ? !config.modalConfigured ? "未配置" : !config.modalEndpointValid ? "地址校验失败，已锁定" : !config.modalBudgetConfirmed ? "预算未确认，已锁定" : "已就绪" : "读取中"}<br />Qwen3.6 · {config ? config.modalLlmConfigured ? "已配置" : "第二阶段，未部署" : "读取中"}</small></span>{config && <i className={modalReady ? "is-good" : "is-warning"} />}</div>
             <div><HardDrive size={20} /><span><strong>PC LoRAChef Agent</strong><small>{!agent ? "正在读取" : agent.status === "online" ? `${agent.agentId || "Agent"} 在线` : agent.lastSeenAt ? `离线 · 上次在线 ${new Date(agent.lastSeenAt).toLocaleString("zh-CN")}` : "离线 · 尚未连接"}</small></span>{agent && <i className={agent.status === "online" ? "is-good" : "is-warning"} />}</div>
           </section>
           <section className="prompt-settings">

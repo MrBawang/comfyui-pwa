@@ -1,4 +1,4 @@
-import { ArrowUp, Copy, MessageSquarePlus, Play, Square, Trash2 } from "lucide-react";
+import { ArrowUp, Copy, MessageSquarePlus, Play, Sparkles, Square, Trash2 } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -48,6 +48,7 @@ export function ChatPage() {
   const [promptPresetId, setPromptPresetId] = useState("");
   const [systemOverride, setSystemOverride] = useState("");
   const [input, setInput] = useState("");
+  const [creatingThread, setCreatingThread] = useState(false);
   const [streaming, setStreaming] = useState(false);
   const [error, setError] = useState<string>();
   const [quota, setQuota] = useState<{
@@ -60,6 +61,7 @@ export function ChatPage() {
   const selectedWorkflow = workflows.find((item) => item.id === workflowId);
   const availableProviders = providers.filter((item) => item.available);
   const modalQwenAvailable = providers.some((item) => item.id === "modal-qwen36" && item.available);
+  const workersAiAvailable = providers.some((item) => item.id === "workers-ai" && item.available);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -115,35 +117,47 @@ export function ChatPage() {
     prompt.scope === mode || (mode === "prompt" && prompt.scope === "workflow" && prompt.workflowId === workflowId)
   )), [mode, prompts, workflowId]);
 
-  async function createThread() {
+  async function createThread(overrides?: { mode?: ChatMode; providerId?: ProviderId }) {
+    if (creatingThread) return;
     setError(undefined);
-    const selectedProvider = providers.find((provider) => provider.id === providerId);
+    const nextMode = overrides?.mode ?? mode;
+    const nextProviderId = overrides?.providerId ?? providerId;
+    const selectedProvider = providers.find((provider) => provider.id === nextProviderId);
     if (!selectedProvider?.available) {
       setError(`${selectedProvider?.label ?? "模型"}尚未配置`);
       return;
     }
-    const response = await fetch("/api/chat/threads", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        title: mode === "prompt" ? selectedWorkflow?.name || "新提示词" : "新对话",
-        mode,
-        providerId,
-        workflowId: mode === "prompt" ? workflowId || undefined : undefined,
-        workflowRevisionId: mode === "prompt" ? selectedWorkflow?.revisionId : undefined,
-        targetFieldName: mode === "prompt" ? targetFieldName || undefined : undefined,
-        systemPromptPresetId: promptPresetId || undefined,
-        systemPromptOverride: systemOverride.trim() || undefined,
-      }),
-    });
-    const body = await response.json();
-    if (!response.ok) {
-      setError(body.message ?? "对话创建失败");
-      return;
+    setCreatingThread(true);
+    try {
+      const response = await fetch("/api/chat/threads", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          title: nextMode === "prompt" ? selectedWorkflow?.name || "新提示词" : "新对话",
+          mode: nextMode,
+          providerId: nextProviderId,
+          workflowId: nextMode === "prompt" ? workflowId || undefined : undefined,
+          workflowRevisionId: nextMode === "prompt" ? selectedWorkflow?.revisionId : undefined,
+          targetFieldName: nextMode === "prompt" ? targetFieldName || undefined : undefined,
+          systemPromptPresetId: nextMode === mode ? promptPresetId || undefined : undefined,
+          systemPromptOverride: nextMode === mode ? systemOverride.trim() || undefined : undefined,
+        }),
+      });
+      const body = await response.json();
+      if (!response.ok) {
+        setError(body.message ?? "对话创建失败");
+        return;
+      }
+      setMode(nextMode);
+      setProviderId(nextProviderId);
+      setThreads((current) => [body, ...current]);
+      setActiveId(body.id);
+      setMessages([]);
+    } catch (createError) {
+      setError(createError instanceof Error ? createError.message : "对话创建失败");
+    } finally {
+      setCreatingThread(false);
     }
-    setThreads((current) => [body, ...current]);
-    setActiveId(body.id);
-    setMessages([]);
   }
 
   async function sendMessage(event: FormEvent) {
@@ -246,7 +260,7 @@ export function ChatPage() {
         <aside className="chat-sidebar">
           <div className="chat-sidebar__heading">
             <div><h1>对话</h1><p>提示词与日常交流</p></div>
-            <button type="button" title="创建对话" onClick={() => void createThread()}><MessageSquarePlus size={18} /></button>
+            <button type="button" title="创建对话" disabled={creatingThread} onClick={() => void createThread()}><MessageSquarePlus size={18} /></button>
           </div>
           <div className="chat-create-controls">
             <div className="segmented" role="group" aria-label="对话模式">
@@ -260,7 +274,7 @@ export function ChatPage() {
             </>}
             <label><span>系统提示词</span><select value={promptPresetId} onChange={(event) => setPromptPresetId(event.target.value)}><option value="">使用默认</option>{matchingPrompts.map((prompt) => <option key={prompt.id} value={prompt.id}>{prompt.name} · v{prompt.version}</option>)}</select></label>
             <details><summary>本会话覆盖</summary><textarea value={systemOverride} maxLength={12_000} rows={5} placeholder="仅覆盖当前新会话" onChange={(event) => setSystemOverride(event.target.value)} /></details>
-            <button type="button" className="chat-create-button" onClick={() => void createThread()}><MessageSquarePlus size={16} />创建会话</button>
+            <button type="button" className="chat-create-button" disabled={creatingThread || availableProviders.length === 0} onClick={() => void createThread()}><MessageSquarePlus size={16} />{creatingThread ? "正在创建" : "创建会话"}</button>
             {error && !active && <p className="form-error" role="alert">{error}</p>}
             {quota && <small className={quota.warning ? "quota quota--warning" : "quota"}>Workers AI 估算 {Math.round(quota.estimatedNeurons).toLocaleString()} / {quota.freeNeurons.toLocaleString()} Neurons{quota.warning ? " · 已达 90%，请手动切换 Modal" : ""}</small>}
           </div>
@@ -269,7 +283,7 @@ export function ChatPage() {
           </div>
         </aside>
         <section className="conversation" aria-live="polite">
-          {!active && <div className="conversation-empty"><MessageSquarePlus size={28} /><strong>创建一个会话</strong><p>聊天使用 Workers AI；提示词会优先选择已配置的 Modal Qwen3.6。</p></div>}
+          {!active && <div className="conversation-empty"><MessageSquarePlus size={28} /><strong>开始使用 AI</strong><p>日常聊天和提示词生成现在都可以直接使用 Workers AI，Modal Qwen 保持关闭。</p><div className="conversation-empty__actions"><button type="button" disabled={!workersAiAvailable || creatingThread} onClick={() => void createThread({ mode: "chat", providerId: "workers-ai" })}><MessageSquarePlus size={16} />开始聊天</button><button type="button" disabled={!workersAiAvailable || creatingThread} onClick={() => void createThread({ mode: "prompt", providerId: "workers-ai" })}><Sparkles size={16} />生成提示词</button></div></div>}
           {active && <>
             <header className="conversation-heading"><div><h2>{active.title}</h2><p>{active.providerId === "workers-ai" ? "Workers AI" : "Qwen3.6 · Modal"}{active.workflowId ? " · 已绑定工作流" : ""}</p></div></header>
             <div className="message-list">

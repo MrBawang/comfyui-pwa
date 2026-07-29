@@ -1878,6 +1878,29 @@ a:focus-visible,
   white-space: pre-wrap;
 }
 
+.library-canvas > .empty-stage { min-height: 100%; margin: auto; justify-content: center; }
+
+.empty-stage__action {
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  margin-top: 6px;
+  padding: 0 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface-raised);
+  color: var(--ink);
+  cursor: pointer;
+  font-size: 0.7rem;
+  font-weight: 650;
+}
+
+.empty-stage__action:hover:not(:disabled) { background: var(--surface-hover); }
+.empty-stage__action:disabled { cursor: wait; opacity: 0.58; }
+.empty-stage__action .is-spinning { animation: spin 0.8s linear infinite; }
+
 .workflow-name-field {
   display: flex;
   flex-direction: column;
@@ -2945,6 +2968,26 @@ a:focus-visible,
 .conversation-empty { min-height: 220px; display: grid; place-content: center; justify-items: center; gap: 8px; padding: 30px; color: var(--muted); text-align: center; }
 .conversation-empty strong { color: var(--ink); font-size: 0.88rem; }
 .conversation-empty p { max-width: 52ch; margin: 0; font-size: 0.72rem; line-height: 1.55; overflow-wrap: anywhere; }
+.conversation-empty__actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 8px; }
+.conversation-empty__actions button {
+  min-height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 0 13px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface-raised);
+  color: var(--ink);
+  cursor: pointer;
+  font-size: 0.7rem;
+  font-weight: 650;
+}
+.conversation-empty__actions button:last-child { border-color: var(--primary); background: var(--primary); color: white; }
+.conversation-empty__actions button:hover:not(:disabled) { background: var(--surface-hover); }
+.conversation-empty__actions button:last-child:hover:not(:disabled) { background: var(--primary-hover); }
+.conversation-empty__actions button:disabled { cursor: wait; opacity: 0.5; }
 .composer { padding: 14px max(24px, calc((100% - 820px) / 2)) 20px; border-top: 1px solid var(--border); background: var(--bg); }
 .composer > p { margin: 0 0 8px; color: var(--danger); font-size: 0.72rem; }
 .composer > div { display: grid; grid-template-columns: minmax(0, 1fr) 42px; align-items: end; gap: 8px; padding: 8px; border: 1px solid var(--border-strong); border-radius: var(--radius-md); background: var(--surface); }

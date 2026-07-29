@@ -26,7 +26,7 @@ R2 byte and operation counters cover only objects managed through this Worker. B
 | Access Allow email | Your one real login email; no wildcard or additional user |
 | `CF_ACCESS_TEAM_DOMAIN` | Your team hostname, for example `team.cloudflareaccess.com`, without `https://` |
 | `CF_ACCESS_AUD` | Audience Tag from the `luminaflow.space` Access application overview |
-| `MODAL_API_URL` | Existing `https://<workspace>--comfy-desk-api.modal.run` address |
+| `MODAL_API_URL` | Exactly `https://luminaflow-studio--comfy-desk-api.modal.run`; other Workspace hosts are rejected |
 | `MODAL_API_TOKEN` | Exactly the same value as `COMFY_API_TOKEN` in Modal Secret `comfy-desk-config` |
 | `LORACHEF_AGENT_TOKEN` | Complete output of `openssl rand -hex 32` |
 | `MODAL_BUDGET_CONFIRMED` | Set to `true` only after both Modal budgets below are confirmed |

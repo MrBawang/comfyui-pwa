@@ -937,7 +937,7 @@ export function Workbench({ isMock }: { isMock: boolean }) {
           <header><div><strong>已保存工作流</strong><span>{storedWorkflows.length} 个工作流</span></div><div className="library-stage__actions"><button type="button" onClick={() => void syncStoredWorkflows()} disabled={syncingLibrary} title="同步 Modal 工作流"><RefreshCw size={15} className={syncingLibrary ? "is-spinning" : undefined} />同步</button><Link to="/">前往运行</Link></div></header>
           <div className="workflow-canvas library-canvas">
             {loadingLibrary && <div className="workflow-list-skeleton" aria-label="正在读取工作流"><span /><span /><span /></div>}
-            {!loadingLibrary && storedWorkflows.length === 0 && <div className="empty-stage"><span aria-hidden="true">{"{}"}</span><strong>工作流库为空</strong><p>左侧上传并通过检查后，可以保存为可重复运行的版本。</p></div>}
+            {!loadingLibrary && storedWorkflows.length === 0 && <div className="empty-stage"><span aria-hidden="true">{"{}"}</span><strong>工作流库为空</strong><p>可以上传新工作流，或从 luminaflow-studio 同步之前已经保存的工作流。同步会先显示一次费用确认。</p><button type="button" className="empty-stage__action" onClick={() => void syncStoredWorkflows()} disabled={syncingLibrary}><RefreshCw size={15} className={syncingLibrary ? "is-spinning" : undefined} />{syncingLibrary ? "正在同步" : "同步现有工作流"}</button></div>}
             {!loadingLibrary && storedWorkflows.length > 0 && <div className="stored-workflow-list">{storedWorkflows.map((stored) => (
               <article key={stored.id}>
                 <div><span className={`stored-status stored-status--${stored.status}`} aria-hidden="true" /><span><strong>{stored.name}</strong><small>{stored.sourceFilename}</small></span></div>

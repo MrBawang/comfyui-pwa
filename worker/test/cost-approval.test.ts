@@ -88,7 +88,8 @@ function testApp() {
     : c.json({ message: String(error) }, 500));
   const env = {
     DB: db.DB,
-    MODAL_API_URL: "https://modal.example",
+    MODAL_WORKSPACE: "luminaflow-studio",
+    MODAL_API_URL: "https://luminaflow-studio--comfy-desk-api.modal.run",
     MODAL_API_TOKEN: "secret",
     MODAL_BUDGET_CONFIRMED: "true",
   } as unknown as Env;
@@ -147,6 +148,20 @@ describe("single-use Modal cost approval", () => {
       method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(descriptor),
     }, env);
     expect(response.status).toBe(503);
+  });
+
+  it("rejects quotes before creation when the endpoint belongs to another Modal workspace", async () => {
+    const { app, env, db } = testApp();
+    env.MODAL_API_URL = "https://mrbawang--comfy-desk-api.modal.run";
+    const response = await app.request("/api/cost-quotes", {
+      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(descriptor),
+    }, env);
+
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toMatchObject({
+      message: "Modal 地址不属于已锁定的 luminaflow-studio Workspace",
+    });
+    expect(db.quotes.size).toBe(0);
   });
 
   it("rejects a token for the wrong action and after its five-minute expiry", async () => {

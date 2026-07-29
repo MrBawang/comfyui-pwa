@@ -7,6 +7,7 @@ import {
   fitsChatContext,
   modelMessages,
   reserveWorkersAi,
+  workersAiStream,
 } from "../src/chat-routes";
 import type { Env } from "../src/env";
 
@@ -78,6 +79,25 @@ describe("chat context and streaming", () => {
 
     expect(providerAbort.signal.aborted).toBe(true);
     expect(providerAbort.signal.reason).toBe("browser closed");
+  });
+
+  it("passes the downstream cancellation signal to Workers AI", async () => {
+    const source = new ReadableStream<Uint8Array>();
+    const run = vi.fn().mockResolvedValue(source);
+    const env = {
+      AI: { run },
+      WORKERS_AI_MODEL: "@cf/qwen/qwen3-30b-a3b-fp8",
+    } as unknown as Env;
+    const controller = new AbortController();
+
+    await expect(workersAiStream(env, [{ role: "user", content: "test" }], 32, 0.5, controller.signal))
+      .resolves.toBe(source);
+    expect(run).toHaveBeenCalledWith(env.WORKERS_AI_MODEL, {
+      messages: [{ role: "user", content: "test" }],
+      stream: true,
+      max_tokens: 32,
+      temperature: 0.5,
+    }, { signal: controller.signal });
   });
 
   it("refuses Workers AI before inference when the worst-case reservation crosses the hard stop", async () => {

@@ -8,6 +8,7 @@ export interface Env {
   DEV_USER_EMAIL?: string;
   CF_ACCESS_TEAM_DOMAIN?: string;
   CF_ACCESS_AUD?: string;
+  MODAL_WORKSPACE: string;
   MODAL_API_URL?: string;
   MODAL_API_TOKEN?: string;
   MODAL_BUDGET_CONFIRMED?: string;
