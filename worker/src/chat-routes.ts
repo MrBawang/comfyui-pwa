@@ -50,6 +50,8 @@ interface ModalChatSubmissionRow {
   message: string | null;
 }
 
+const MODAL_WARMUP_RETRY_STATUSES = new Set([408, 425, 429, 500, 502, 503, 504, 522, 523, 524]);
+
 function thread(row: ThreadRow): ChatThread {
   return {
     id: row.id,
@@ -257,6 +259,52 @@ function providerDelta(payload: string) {
   }
 }
 
+function modalLlmBaseUrl(url: string) {
+  return url.replace(/\/$/, "").replace(/\/v1\/chat\/completions$/, "");
+}
+
+export async function warmModalLlm(
+  env: Pick<UserContext["Bindings"], "MODAL_LLM_URL" | "MODAL_LLM_TOKEN">,
+  signal: AbortSignal,
+  fetcher: typeof fetch = fetch,
+) {
+  if (!env.MODAL_LLM_URL || !env.MODAL_LLM_TOKEN) throw new Error("Modal Qwen3.6 尚未部署");
+  const url = `${modalLlmBaseUrl(env.MODAL_LLM_URL)}/health`;
+  let lastStatus: number | undefined;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      const response = await fetcher(url, {
+        method: "GET",
+        signal,
+        headers: { authorization: `Bearer ${env.MODAL_LLM_TOKEN}` },
+      });
+      if (response.ok) return;
+      lastStatus = response.status;
+      await response.body?.cancel().catch(() => undefined);
+      if (!MODAL_WARMUP_RETRY_STATUSES.has(response.status)) break;
+    } catch (error) {
+      if (signal.aborted) throw error;
+      if (attempt === 1) throw new Error("Modal Qwen3.6 冷启动连接失败");
+    }
+  }
+  throw new Error(`Modal Qwen3.6 冷启动失败${lastStatus ? `（${lastStatus}）` : ""}`);
+}
+
+export function modalChatPayload(
+  mode: ChatMode,
+  messages: Array<{ role: string; content: string }>,
+  maxTokens: number,
+) {
+  return {
+    model: "qwen3.6-35b-a3b-hauhaucs",
+    messages,
+    stream: true,
+    max_tokens: maxTokens,
+    temperature: mode === "prompt" ? 0.55 : 0.7,
+    chat_template_kwargs: { enable_thinking: false },
+  };
+}
+
 async function providerStream(
   c: Context<UserContext>,
   row: ThreadRow,
@@ -268,22 +316,15 @@ async function providerStream(
     return workersAiStream(c.env, messages, maxTokens, row.mode === "prompt" ? 0.55 : 0.7, signal);
   }
   if (!c.env.MODAL_LLM_URL || !c.env.MODAL_LLM_TOKEN) throw new Error("Modal Qwen3.6 尚未部署");
-  const url = c.env.MODAL_LLM_URL.replace(/\/$/, "");
-  const response = await fetch(url.endsWith("/v1/chat/completions") ? url : `${url}/v1/chat/completions`, {
+  const url = `${modalLlmBaseUrl(c.env.MODAL_LLM_URL)}/v1/chat/completions`;
+  const response = await fetch(url, {
     method: "POST",
     signal,
     headers: {
       authorization: `Bearer ${c.env.MODAL_LLM_TOKEN}`,
       "content-type": "application/json",
     },
-    body: JSON.stringify({
-      model: "qwen3.6-35b-a3b-hauhaucs",
-      messages,
-      stream: true,
-      max_tokens: maxTokens,
-      temperature: row.mode === "prompt" ? 0.55 : 0.7,
-      chat_template_kwargs: { enable_thinking: row.mode !== "prompt" },
-    }),
+    body: JSON.stringify(modalChatPayload(row.mode, messages, maxTokens)),
   });
   if (!response.ok || !response.body) throw new Error(`Modal Qwen3.6 请求失败（${response.status}）`);
   return response.body;
@@ -588,12 +629,19 @@ chatRoutes.post("/api/chat/threads/:threadId/messages", async (c) => {
   const encoder = new TextEncoder();
   const providerAbort = new AbortController();
   const send = (event: string, data: unknown) => writer.write(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
-  c.executionCtx.waitUntil((async () => {
+  // An open response stream keeps the Worker alive while Modal warms and generates.
+  void (async () => {
     let assistant = "";
+    let modalGenerationStarted = false;
     const providerTimeout = row.provider_id === "modal-qwen36"
       ? setTimeout(() => providerAbort.abort(new Error("Modal Qwen3.6 请求超过 GPU 租约时限")), 14 * 60 * 1_000)
       : setTimeout(() => providerAbort.abort(new Error("Workers AI 请求超过 90 秒，已停止等待")), 90 * 1_000);
     try {
+      if (row.provider_id === "modal-qwen36") {
+        await send("status", { message: "正在启动 Modal Qwen3.6" });
+        await warmModalLlm(c.env, providerAbort.signal);
+        modalGenerationStarted = true;
+      }
       const source = await providerStream(c, row, providerMessages, providerAbort.signal);
       await consumeProviderStream(source, async (delta) => {
         assistant += delta;
@@ -635,9 +683,13 @@ chatRoutes.post("/api/chat/threads/:threadId/messages", async (c) => {
       }) });
     } catch (error) {
       if (modalOperationId) {
-        const message = `${error instanceof Error ? error.message : "Modal 对话失败"}；结果不明确，未自动重提`;
-        await c.env.DB.prepare(`UPDATE modal_submissions SET status = 'needs-human', message = ?1,
-          updated_at = ?2 WHERE id = ?3`).bind(message, now(), modalOperationId).run();
+        const suffix = modalGenerationStarted
+          ? "；结果不明确，未自动重提"
+          : "；生成尚未开始，可以重新批准后再试";
+        const status = modalGenerationStarted ? "needs-human" : "rejected";
+        const message = `${error instanceof Error ? error.message : "Modal 对话失败"}${suffix}`;
+        await c.env.DB.prepare(`UPDATE modal_submissions SET status = ?1, message = ?2,
+          updated_at = ?3 WHERE id = ?4`).bind(status, message, now(), modalOperationId).run();
       }
       await send("error", { message: error instanceof Error ? error.message : "模型请求失败" }).catch(() => undefined);
     } finally {
@@ -646,7 +698,7 @@ chatRoutes.post("/api/chat/threads/:threadId/messages", async (c) => {
       await releaseWorkersAiReservation(c.env, owner(c), workersReservation).catch(() => undefined);
       await writer.close().catch(() => undefined);
     }
-  })());
+  })();
   return new Response(abortProviderOnResponseCancel(stream.readable, providerAbort), {
     headers: {
       "content-type": "text/event-stream; charset=utf-8",

@@ -7,8 +7,10 @@ import {
   estimatedTokens,
   fitsChatContext,
   modelMessages,
+  modalChatPayload,
   reserveWorkersAi,
   systemPromptLimitError,
+  warmModalLlm,
   workersAiStream,
 } from "../src/chat-routes";
 import type { Env } from "../src/env";
@@ -62,6 +64,44 @@ describe("chat context and streaming", () => {
     await consumeProviderStream(source, async (content) => { chunks.push(content); });
 
     expect(chunks.join("")).toBe("你好");
+  });
+
+  it("warms Modal safely after a cold-start 524 without submitting generation", async () => {
+    const fetcher = vi.fn()
+      .mockResolvedValueOnce(new Response(null, { status: 524 }))
+      .mockResolvedValueOnce(Response.json({ status: "ready" }));
+    const env = {
+      MODAL_LLM_URL: "https://workspace--llm.modal.run/v1/chat/completions",
+      MODAL_LLM_TOKEN: "secret",
+    } as Pick<Env, "MODAL_LLM_URL" | "MODAL_LLM_TOKEN">;
+
+    await warmModalLlm(env, new AbortController().signal, fetcher as typeof fetch);
+
+    expect(fetcher).toHaveBeenCalledTimes(2);
+    expect(fetcher.mock.calls.map(([url]) => url)).toEqual([
+      "https://workspace--llm.modal.run/health",
+      "https://workspace--llm.modal.run/health",
+    ]);
+    expect(fetcher.mock.calls.every(([, init]) => init.method === "GET")).toBe(true);
+  });
+
+  it("does not retry a non-transient Modal warmup rejection", async () => {
+    const fetcher = vi.fn().mockResolvedValue(new Response(null, { status: 401 }));
+    const env = {
+      MODAL_LLM_URL: "https://workspace--llm.modal.run",
+      MODAL_LLM_TOKEN: "secret",
+    } as Pick<Env, "MODAL_LLM_URL" | "MODAL_LLM_TOKEN">;
+
+    await expect(warmModalLlm(env, new AbortController().signal, fetcher as typeof fetch))
+      .rejects.toThrow("冷启动失败（401）");
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+
+  it("disables thinking so the output budget is reserved for the final answer", () => {
+    const payload = modalChatPayload("chat", [{ role: "user", content: "hello" }], 2_048);
+
+    expect(payload.chat_template_kwargs).toEqual({ enable_thinking: false });
+    expect(payload.max_tokens).toBe(2_048);
   });
 
   it("cancels the provider stream when the downstream consumer disconnects", async () => {
