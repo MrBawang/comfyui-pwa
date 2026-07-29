@@ -108,12 +108,14 @@ def main() -> None:
     minimum_speed = min(item[1] for item in results)
     server_health = health(args.url, args.token)
     peak_memory_mib = int((server_health.get("gpuMemory") or {}).get("peakUsedMiB", 0))
-    passed = p95 <= 5 and minimum_speed >= 15 and 0 < peak_memory_mib <= 44 * 1024
+    context_size = int(server_health.get("contextSize", 0))
+    passed = p95 <= 5 and minimum_speed >= 15 and 0 < peak_memory_mib <= 44 * 1024 and context_size >= 65_536
     print(json.dumps({
         "coldStartTtft": cold_ttft,
         "hotTtftP95": p95,
         "minimumTokenPerSecond": minimum_speed,
         "peakGpuMemoryMiB": peak_memory_mib,
+        "contextSize": context_size,
         "activeQuant": server_health.get("quant"),
         "passed": passed,
     }, indent=2))

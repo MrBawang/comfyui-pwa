@@ -78,7 +78,7 @@ uv run --python 3.11 --with-requirements requirements-modal.txt modal run modal_
 uv run --python 3.11 --with-requirements requirements-modal.txt modal deploy modal_app/llm_app.py
 ```
 
-Only explicitly installed, checksum-verified files are eligible. Startup tries the active quant and then lower variants, rejects peak startup memory over 44 GiB, uses a 16K context, one concurrent request, and no vision projector. Run the billable 20-prompt gate only when ready:
+Only explicitly installed, checksum-verified files are eligible. Startup tries the active quant and then lower variants, rejects peak startup memory over 44 GiB, uses a 64K context with a 60K input budget, one concurrent request, and no vision projector. Run the billable 20-prompt gate only when ready:
 
 ```bash
 python3 scripts/benchmark_llm.py --url "$MODAL_LLM_URL" --token "$MODAL_LLM_TOKEN" --confirm-gpu

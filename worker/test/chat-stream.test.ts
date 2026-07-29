@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   abortProviderOnResponseCancel,
+  chatInputTokenBudget,
   consumeProviderStream,
   estimatedTokens,
   fitsChatContext,
@@ -24,7 +25,7 @@ function message(id: string, content: string, role: "user" | "assistant" = "user
 }
 
 describe("chat context and streaming", () => {
-  it("budgets Chinese text conservatively for the 16K context", () => {
+  it("preserves the existing Workers AI input budget", () => {
     expect(estimatedTokens("abcd中文")).toBe(3);
     const history = [message("1", "旧".repeat(3_000)), message("2", "新".repeat(2_000))];
     const result = modelMessages("系".repeat(10_000), history);
@@ -34,10 +35,17 @@ describe("chat context and streaming", () => {
     expect(fitsChatContext("系".repeat(10_000), "新".repeat(3_501))).toBe(false);
   });
 
-  it("accepts 32K ASCII system prompts while preserving the token budget", () => {
+  it("uses the 64K Modal context without changing the Workers AI budget", () => {
+    expect(chatInputTokenBudget("workers-ai")).toBe(13_500);
+    expect(chatInputTokenBudget("modal-qwen36")).toBe(60_000);
+    expect(fitsChatContext("系".repeat(32_000), "新".repeat(20_000), chatInputTokenBudget("modal-qwen36"))).toBe(true);
+    expect(fitsChatContext("系".repeat(32_000), "新".repeat(20_000), chatInputTokenBudget("workers-ai"))).toBe(false);
+  });
+
+  it("accepts a 32K-character system prompt within the Modal token budget", () => {
     expect(systemPromptLimitError("a".repeat(32_000))).toBeUndefined();
     expect(systemPromptLimitError("a".repeat(32_001))).toContain("32,000 字符");
-    expect(systemPromptLimitError("系".repeat(12_001))).toContain("12,000 tokens");
+    expect(systemPromptLimitError("系".repeat(32_000))).toBeUndefined();
   });
 
   it("parses both Workers AI and OpenAI-compatible SSE records", async () => {

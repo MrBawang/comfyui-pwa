@@ -198,7 +198,7 @@ class QwenServer:
                 "--alias", MODEL_ID,
                 "--host", "127.0.0.1",
                 "--port", "8001",
-                "--ctx-size", "16384",
+                "--ctx-size", "65536",
                 "--parallel", "1",
                 "--n-gpu-layers", "999",
                 "--cache-type-k", "q8_0",

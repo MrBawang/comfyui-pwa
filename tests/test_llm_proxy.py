@@ -52,10 +52,20 @@ class LlmProxyTests(unittest.TestCase):
 
         self.assertEqual(len(payload["messages"][0]["content"]), 32_000)
 
-    def test_rejects_system_message_over_token_budget(self):
-        with self.assertRaises(HTTPException):
+    def test_accepts_32k_chinese_system_message_within_token_budget(self):
+        payload = _validated_payload({"messages": [
+            {"role": "system", "content": "系" * 32_000},
+            {"role": "user", "content": "hello"},
+        ]})
+
+        self.assertEqual(len(payload["messages"][0]["content"]), 32_000)
+
+    def test_rejects_messages_over_60k_input_budget(self):
+        with self.assertRaisesRegex(HTTPException, "60,000 token input budget"):
             _validated_payload({"messages": [
-                {"role": "system", "content": "系" * 12_001},
+                {"role": "system", "content": "系" * 32_000},
+                {"role": "user", "content": "新" * 20_000},
+                {"role": "assistant", "content": "旧" * 8_001},
             ]})
 
 

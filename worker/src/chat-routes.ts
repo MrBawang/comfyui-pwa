@@ -139,7 +139,7 @@ async function releaseWorkersAiReservation(
 function availableProviders(c: { env: UserContext["Bindings"] }) {
   return [
     { id: "workers-ai" as const, label: "Workers AI", model: c.env.WORKERS_AI_MODEL, available: Boolean(c.env.AI) },
-    { id: "modal-qwen36" as const, label: "Qwen3.6 · Modal", model: "Q6 / Q5 / Q4", available: Boolean(c.env.MODAL_LLM_URL && c.env.MODAL_LLM_TOKEN) },
+    { id: "modal-qwen36" as const, label: "Qwen3.6 · Modal · 64K", model: "Q6 / Q5 / Q4 · 64K", available: Boolean(c.env.MODAL_LLM_URL && c.env.MODAL_LLM_TOKEN) },
   ];
 }
 
@@ -204,7 +204,8 @@ async function defaultPromptPreset(
     ORDER BY version DESC LIMIT 1`).bind(owner(c), mode).first<{ id: string; version: number }>();
 }
 
-export const MAX_INPUT_TOKENS = 13_500;
+export const WORKERS_AI_MAX_INPUT_TOKENS = 13_500;
+export const MODAL_MAX_INPUT_TOKENS = 60_000;
 
 export function estimatedTokens(content: string) {
   let asciiCharacters = 0;
@@ -216,24 +217,28 @@ export function estimatedTokens(content: string) {
   return Math.ceil(asciiCharacters / 4) + otherCharacters;
 }
 
-export function fitsChatContext(system: string, content: string) {
-  return estimatedTokens(system) + estimatedTokens(content) <= MAX_INPUT_TOKENS;
+export function chatInputTokenBudget(providerId: ProviderId) {
+  return providerId === "modal-qwen36" ? MODAL_MAX_INPUT_TOKENS : WORKERS_AI_MAX_INPUT_TOKENS;
+}
+
+export function fitsChatContext(system: string, content: string, maxInputTokens = WORKERS_AI_MAX_INPUT_TOKENS) {
+  return estimatedTokens(system) + estimatedTokens(content) <= maxInputTokens;
 }
 
 export function systemPromptLimitError(content: string) {
   if (content.length > MAX_SYSTEM_PROMPT_CHARS) return "系统提示词不能超过 32,000 字符";
   if (estimatedTokens(content) > MAX_SYSTEM_PROMPT_TOKENS) {
-    return "系统提示词超过当前 16K 上下文预算（最多约 12,000 tokens）";
+    return "系统提示词不能超过约 32,000 tokens";
   }
   return undefined;
 }
 
-export function modelMessages(system: string, history: MessageRow[]) {
+export function modelMessages(system: string, history: MessageRow[], maxInputTokens = WORKERS_AI_MAX_INPUT_TOKENS) {
   const limited: Array<{ role: "system" | "user" | "assistant"; content: string }> = [{ role: "system", content: system }];
   let tokens = estimatedTokens(system);
   for (const item of [...history].reverse()) {
     const itemTokens = estimatedTokens(item.content);
-    if (limited.length >= 21 || tokens + itemTokens > MAX_INPUT_TOKENS) break;
+    if (limited.length >= 21 || tokens + itemTokens > maxInputTokens) break;
     limited.splice(1, 0, { role: item.role, content: item.content });
     tokens += itemTokens;
   }
@@ -496,8 +501,10 @@ chatRoutes.post("/api/chat/threads/:threadId/messages", async (c) => {
   const content = String(body.content ?? "").trim();
   if (!content || content.length > 20_000) return jsonError(c, "消息内容不能为空且不能超过 20,000 字符");
   const systemPrompt = await resolveSystemPrompt(c, row);
-  if (!fitsChatContext(systemPrompt, content)) {
-    return jsonError(c, "消息与系统提示词合计超过 16K 上下文，请缩短内容");
+  const inputTokenBudget = chatInputTokenBudget(row.provider_id);
+  if (!fitsChatContext(systemPrompt, content, inputTokenBudget)) {
+    const contextLabel = row.provider_id === "modal-qwen36" ? "Modal 64K" : "Workers AI";
+    return jsonError(c, `消息与系统提示词合计超过 ${contextLabel} 上下文预算，请缩短内容`);
   }
   let releaseModalGpu: (() => Promise<void>) | undefined;
   let workersReservation: { inputTokens: number; reservedNeurons: number; usageDate: string } | undefined;
@@ -519,7 +526,7 @@ chatRoutes.post("/api/chat/threads/:threadId/messages", async (c) => {
     provider_id: null,
     created_at: now(),
   };
-  const providerMessages = modelMessages(systemPrompt, [...previous.results, pendingUser]);
+  const providerMessages = modelMessages(systemPrompt, [...previous.results, pendingUser], inputTokenBudget);
   if (row.provider_id === "modal-qwen36") {
     modalIdempotencyKey = requireIdempotencyKey(c);
     const existing = await modalChatSubmission(c, modalIdempotencyKey);

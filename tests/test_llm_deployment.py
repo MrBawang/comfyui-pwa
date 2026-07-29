@@ -9,6 +9,7 @@ class LlmDeploymentTests(unittest.TestCase):
         self.assertIn("-DCMAKE_CUDA_ARCHITECTURES=89", source)
         self.assertIn("/usr/local/cuda/lib64/stubs/libcuda.so.1", source)
         self.assertIn('gpu="L40S"', source)
+        self.assertIn('"--ctx-size", "65536"', source)
 
 
 if __name__ == "__main__":

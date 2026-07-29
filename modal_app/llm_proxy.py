@@ -16,8 +16,9 @@ from fastapi.responses import JSONResponse, Response, StreamingResponse
 UPSTREAM = "http://127.0.0.1:8001"
 MAX_REQUEST_BYTES = 512 * 1024
 MAX_SYSTEM_CHARS = 32_000
-MAX_SYSTEM_TOKENS = 12_000
+MAX_SYSTEM_TOKENS = 32_000
 MAX_MESSAGE_CHARS = 20_000
+MAX_INPUT_TOKENS = 60_000
 GPU_PEAK_USED_MIB = 0
 
 app = FastAPI(title="Qwen3.6 Modal API", docs_url=None, redoc_url=None)
@@ -88,13 +89,15 @@ def _validated_payload(raw: Any) -> dict[str, Any]:
             if index != 0 or len(content) > MAX_SYSTEM_CHARS or _estimated_tokens(content) > MAX_SYSTEM_TOKENS:
                 raise HTTPException(
                     status_code=400,
-                    detail="system message must be first, at most 32,000 characters, and about 12,000 tokens",
+                    detail="system message must be first and at most 32,000 characters or estimated tokens",
                 )
         elif len(content) > MAX_MESSAGE_CHARS:
             raise HTTPException(status_code=400, detail=f"message {index} has invalid content")
         messages.append({"role": item["role"], "content": content})
     if not messages or messages[0]["role"] != "system":
         raise HTTPException(status_code=400, detail="the first message must be a system message")
+    if sum(_estimated_tokens(item["content"]) for item in messages) > MAX_INPUT_TOKENS:
+        raise HTTPException(status_code=400, detail="messages exceed the 60,000 token input budget")
     template_kwargs = raw.get("chat_template_kwargs") or {}
     if not isinstance(template_kwargs, dict):
         raise HTTPException(status_code=400, detail="chat_template_kwargs must be an object")
@@ -128,7 +131,7 @@ async def health(request: Request) -> JSONResponse:
             "quant": os.environ.get("LLM_ACTIVE_QUANT", "unknown"),
             "revision": os.environ.get("LLM_MODEL_REVISION", "unknown"),
             "sha256": os.environ.get("LLM_ACTIVE_SHA256", "unknown"),
-            "contextSize": 16_384,
+            "contextSize": 65_536,
             "concurrency": 1,
             "gpuMemory": _record_gpu_memory(),
         },
