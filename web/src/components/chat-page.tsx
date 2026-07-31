@@ -1,8 +1,15 @@
-import { ArrowUp, Copy, MessageSquarePlus, Play, Sparkles, Square, Trash2 } from "lucide-react";
+import { ArrowUp, Copy, LoaderCircle, MessageSquarePlus, Play, Sparkles, Square, Trash2 } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-import type { ChatMessage, ChatMode, ChatThread, ProviderId, SystemPromptPreset } from "@shared/contracts";
+import type {
+  ChatMessage,
+  ChatMode,
+  ChatOperation,
+  ChatThread,
+  ProviderId,
+  SystemPromptPreset,
+} from "@shared/contracts";
 import { costTargets } from "@shared/costs";
 import { AppHeader } from "@/components/app-header";
 import { readJson } from "@/lib/api";
@@ -53,6 +60,7 @@ export function ChatPage() {
   const [creatingThread, setCreatingThread] = useState(false);
   const [updatingProvider, setUpdatingProvider] = useState(false);
   const [streaming, setStreaming] = useState(false);
+  const [modalOperation, setModalOperation] = useState<ChatOperation>();
   const [error, setError] = useState<string>();
   const [quota, setQuota] = useState<{
     estimatedNeurons: number; reservedNeurons: number; freeNeurons: number; stopNeurons: number; warning: boolean; blocked: boolean;
@@ -89,20 +97,89 @@ export function ChatPage() {
   useEffect(() => {
     if (!activeId) {
       setMessages([]);
+      setModalOperation(undefined);
+      setStreaming(false);
       return;
     }
+    abortRef.current?.abort();
+    setModalOperation(undefined);
+    setStreaming(false);
     const controller = new AbortController();
     void fetch(`/api/chat/threads/${activeId}`, { signal: controller.signal })
       .then(async (response) => {
         const body = await response.json();
         if (!response.ok) throw new Error(body.message ?? "对话读取失败");
         setMessages(body.messages ?? []);
+        setModalOperation(body.operation);
+        if (body.operation && ["failed", "needs-human", "cancelled"].includes(body.operation.status)) {
+          setError(body.operation.message ?? "Modal 对话任务未完成");
+        } else {
+          setError(undefined);
+        }
       })
       .catch((loadError) => {
         if (!(loadError instanceof DOMException && loadError.name === "AbortError")) setError(loadError.message);
       });
     return () => controller.abort();
   }, [activeId]);
+
+  useEffect(() => {
+    const operationId = modalOperation?.id;
+    if (!operationId || !activeId || modalOperation?.threadId !== activeId) return;
+    if (["failed", "cancelled"].includes(modalOperation.status)) {
+      setError(modalOperation.message ?? "Modal 对话任务未完成");
+      setStreaming(false);
+      return;
+    }
+    if (!["queued", "submitting", "warming", "generating", "needs-human"].includes(modalOperation.status)) return;
+    const controller = new AbortController();
+    setStreaming(true);
+    void (async () => {
+      let delay = 2_000;
+      while (!controller.signal.aborted) {
+        try {
+          const response = await fetch(`/api/chat/operations/${encodeURIComponent(operationId)}`, {
+            signal: controller.signal,
+            cache: "no-store",
+          });
+          const body = await readJson<{ operation: ChatOperation }>(response, "对话任务状态读取失败");
+          const operation = body.operation;
+          setModalOperation(operation);
+          if (operation.status === "completed") {
+            if (operation.assistantMessage) {
+              setMessages((current) => current.some((item) => item.id === operation.assistantMessage!.id)
+                ? current
+                : [...current.filter((item) => item.id !== "streaming"), operation.assistantMessage!]);
+            }
+            setModalOperation(undefined);
+            setStreaming(false);
+            return;
+          }
+          if (["failed", "cancelled"].includes(operation.status)) {
+            setError(operation.message ?? "Modal 对话任务未完成");
+            setStreaming(false);
+            return;
+          }
+          setError(operation.status === "needs-human"
+            ? operation.message ?? "Modal 提交结果不明确，正在等待费用保护期结束"
+            : undefined);
+          delay = Math.min(15_000, delay + 2_000);
+        } catch (pollError) {
+          if (controller.signal.aborted) return;
+          setError("状态连接暂时中断，云端任务仍会继续；页面正在恢复");
+          delay = 15_000;
+        }
+        await new Promise<void>((resolve) => {
+          const timeout = window.setTimeout(resolve, delay);
+          controller.signal.addEventListener("abort", () => {
+            window.clearTimeout(timeout);
+            resolve();
+          }, { once: true });
+        });
+      }
+    })();
+    return () => controller.abort();
+  }, [activeId, modalOperation?.id]);
 
   useEffect(() => { endRef.current?.scrollIntoView({ block: "end" }); }, [messages]);
 
@@ -186,6 +263,7 @@ export function ChatPage() {
     const controller = new AbortController();
     abortRef.current = controller;
     let accepted = false;
+    let keepModalPolling = false;
     try {
       const response = await fetch(`/api/chat/threads/${active.id}/messages`, {
         method: "POST",
@@ -195,6 +273,27 @@ export function ChatPage() {
         body: JSON.stringify({ content }),
         signal: controller.signal,
       });
+      if (active.providerId === "modal-qwen36") {
+        const body = await readJson<{ operation: ChatOperation; userMessage?: ChatMessage }>(
+          response,
+          "Modal 对话任务提交失败",
+        );
+        accepted = true;
+        setMessages((current) => current
+          .filter((item) => item.id !== "streaming")
+          .map((item) => item.id === temporaryUser.id && body.userMessage ? body.userMessage : item));
+        if (body.operation.status === "completed" && body.operation.assistantMessage) {
+          setMessages((current) => current.some((item) => item.id === body.operation.assistantMessage!.id)
+            ? current
+            : [...current, body.operation.assistantMessage!]);
+          setModalOperation(undefined);
+        } else {
+          setModalOperation(body.operation);
+          keepModalPolling = ["queued", "submitting", "warming", "generating", "needs-human"]
+            .includes(body.operation.status);
+        }
+        return;
+      }
       if (!response.ok || !response.body) {
         const body = await response.json().catch(() => ({}));
         throw new Error(body.message ?? "模型请求失败");
@@ -234,7 +333,7 @@ export function ChatPage() {
         setMessages((current) => current.filter((item) => item.id !== "streaming" || item.content));
       }
     } finally {
-      setStreaming(false);
+      if (!keepModalPolling) setStreaming(false);
       abortRef.current = undefined;
     }
   }
@@ -265,9 +364,14 @@ export function ChatPage() {
 
   async function deleteThread(threadId: string) {
     if (!window.confirm("删除这个对话及其消息？")) return;
-    await fetch(`/api/chat/threads/${threadId}`, { method: "DELETE" });
-    setThreads((current) => current.filter((item) => item.id !== threadId));
-    if (activeId === threadId) setActiveId(threads.find((item) => item.id !== threadId)?.id);
+    try {
+      const response = await fetch(`/api/chat/threads/${threadId}`, { method: "DELETE" });
+      await readJson(response, "对话删除失败");
+      setThreads((current) => current.filter((item) => item.id !== threadId));
+      if (activeId === threadId) setActiveId(threads.find((item) => item.id !== threadId)?.id);
+    } catch (deleteError) {
+      setError(deleteError instanceof Error ? deleteError.message : "对话删除失败");
+    }
   }
 
   function useForRun(message: ChatMessage) {
@@ -319,11 +423,12 @@ export function ChatPage() {
             <div className="message-list">
               {messages.length === 0 && <div className="conversation-empty"><strong>{active.mode === "prompt" ? "描述你想得到的画面" : "开始对话"}</strong><p>{active.mode === "prompt" ? "结果可以直接写入已绑定的工作流字段。" : "对话会安全保存在当前 Cloudflare 账户。"}</p></div>}
               {messages.map((item) => <article key={item.id} className={`message message--${item.role}`}><header><span>{item.role === "user" ? "你" : item.providerId === "modal-qwen36" ? "Qwen3.6" : "AI"}</span>{item.role === "assistant" && item.content && <div><button type="button" title="复制" onClick={() => void navigator.clipboard.writeText(item.content)}><Copy size={15} /></button>{active.mode === "prompt" && active.workflowId && active.targetFieldName && <button type="button" title="用于运行" onClick={() => useForRun(item)}><Play size={15} /></button>}</div>}</header><p>{item.content || <span className="typing-indicator"><i /><i /><i /></span>}</p></article>)}
+              {modalOperation && modalOperation.threadId === active.id && ["queued", "submitting", "warming", "generating", "needs-human"].includes(modalOperation.status) && <article className="message message--assistant message--operation"><header><span>Qwen3.6</span><small>{modalOperation.status === "queued" ? "排队" : modalOperation.status === "generating" ? "生成中" : modalOperation.status === "needs-human" ? "人工核对" : "启动中"}</small></header><p><span className="typing-indicator"><i /><i /><i /></span>{modalOperation.message ?? "云端任务处理中，可关闭页面后稍后返回"}</p></article>}
               <div ref={endRef} />
             </div>
             <form className="composer" onSubmit={(event) => void sendMessage(event)}>
               {error && <p role="alert">{error}</p>}
-              <div><textarea value={input} rows={2} maxLength={20_000} placeholder={active.mode === "prompt" ? "描述画面、动作和希望保留的内容" : "输入消息"} disabled={streaming} onChange={(event) => setInput(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); event.currentTarget.form?.requestSubmit(); } }} />{streaming ? <button type="button" title="停止生成" onClick={() => abortRef.current?.abort()}><Square size={17} fill="currentColor" /></button> : <button type="submit" title="发送" disabled={!input.trim()}><ArrowUp size={18} /></button>}</div>
+              <div><textarea value={input} rows={2} maxLength={20_000} placeholder={active.mode === "prompt" ? "描述画面、动作和希望保留的内容" : "输入消息"} disabled={streaming} onChange={(event) => setInput(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); event.currentTarget.form?.requestSubmit(); } }} />{streaming ? modalOperation ? <button type="button" title="Modal 云端任务处理中，可离开页面" disabled><LoaderCircle className="spin" size={17} /></button> : <button type="button" title="停止生成" onClick={() => abortRef.current?.abort()}><Square size={17} fill="currentColor" /></button> : <button type="submit" title="发送" disabled={!input.trim()}><ArrowUp size={18} /></button>}</div>
             </form>
           </>}
         </section>

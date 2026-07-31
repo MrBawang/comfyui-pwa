@@ -38,6 +38,23 @@ function parts(...values: Array<string | undefined>) {
   return values.map((value) => value?.trim() || "default").join(":");
 }
 
+function publicDownloadUrl(value: string) {
+  try {
+    const url = new URL(value);
+    url.username = "";
+    url.password = "";
+    url.hash = "";
+    const sensitive = new Set(["access_token", "api_key", "apikey", "auth", "authorization", "key", "token"]);
+    for (const key of [...url.searchParams.keys()]) {
+      if (sensitive.has(key.toLowerCase())) url.searchParams.set(key, "redacted");
+    }
+    url.searchParams.sort();
+    return url.toString();
+  } catch {
+    return "invalid-url";
+  }
+}
+
 export const costTargets = {
   workflowFile(filename: string) {
     return parts("file", filename);
@@ -56,6 +73,9 @@ export const costTargets = {
   },
   model(repoId: string, repoFile: string, revision: string, category: string, filename: string) {
     return parts("model", repoId, repoFile, revision, category, filename);
+  },
+  modelUrl(sourceUrl: string, category: string, filename: string, sha256?: string) {
+    return parts("model-url", publicDownloadUrl(sourceUrl), category, filename, sha256);
   },
   nodePackage(registryId?: string, sourceRepository?: string, sourceRevision?: string) {
     return parts("node", registryId || sourceRepository, sourceRevision);

@@ -16,25 +16,24 @@ function cssRule(selector) {
   return globalStyles.match(new RegExp(`${escapedSelector}\\s*\\{([^}]+)\\}`))?.[1] ?? "";
 }
 
-test("single image output uses its dedicated preview container", () => {
+test("workflow output uses a selectable browser with an accessible preview dialog", () => {
   assert.match(
     runnerSource,
-    /outputs\.length === 1[\s\S]*className="output-single"[\s\S]*<img src=\{outputs\[0\]\.url\}/,
+    /className="output-browser"[\s\S]*className="output-browser__thumbnails"[\s\S]*<dialog ref=\{dialog\} className="output-preview-dialog"/,
   );
+  assert.match(runnerSource, /event\.key === "ArrowLeft"/);
+  assert.match(runnerSource, /event\.key === "ArrowRight"/);
   assert.doesNotMatch(globalStyles, /\.workflow-canvas\s*>\s*img\s*\{/);
 });
 
-test("single image preview fits landscape and portrait images without cropping", () => {
-  const containerRule = cssRule(".output-single");
-  const imageRule = cssRule(".output-single img");
+test("output preview fits landscape and portrait images without cropping", () => {
+  const containerRule = cssRule(".output-browser__main");
+  const imageRule = globalStyles.match(/\.output-browser__preview img,[\s\S]*?\{([\s\S]*?)\}/)?.[1] ?? "";
 
   assert.match(containerRule, /min-width:\s*0\s*;/);
   assert.match(containerRule, /min-height:\s*0\s*;/);
   assert.match(containerRule, /place-items:\s*center\s*;/);
-  assert.match(imageRule, /width:\s*auto\s*;/);
-  assert.match(imageRule, /height:\s*auto\s*;/);
-  assert.match(imageRule, /max-width:\s*100%\s*;/);
-  assert.match(imageRule, /max-height:\s*100%\s*;/);
+  assert.match(imageRule, /width:\s*100%\s*;/);
+  assert.match(imageRule, /height:\s*100%\s*;/);
   assert.match(imageRule, /object-fit:\s*contain\s*;/);
-  assert.match(imageRule, /object-position:\s*center\s*;/);
 });

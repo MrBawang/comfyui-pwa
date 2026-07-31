@@ -92,6 +92,11 @@ function storedWorkflowDescriptor(workflowId: string): CostDescriptor {
   };
 }
 
+export function shouldCacheWorkflowResponse(modalPath: string) {
+  return modalPath === "/workflows"
+    || /^\/workflows\/[a-f0-9]{32}(?:\/recheck)?$/.test(modalPath);
+}
+
 export async function meteredModalDescriptor(c: Context<UserContext>, modalPath: string): Promise<CostDescriptor> {
   if (modalPath === "/workflows/analyze") return uploadedWorkflowDescriptor(c, "workflow-analyze");
   if (modalPath === "/workflows/convert") return uploadedWorkflowDescriptor(c, "workflow-convert");
@@ -101,10 +106,14 @@ export async function meteredModalDescriptor(c: Context<UserContext>, modalPath:
 
   const body = await c.req.raw.clone().json().catch(() => ({})) as Record<string, unknown>;
   if (modalPath === "/resources/models") {
+    const sourceKind = String(body.sourceKind ?? "huggingface");
     return {
       action: "model-download",
-      target: costTargets.model(String(body.repoId ?? ""), String(body.repoFile ?? ""),
-        String(body.revision ?? "main"), String(body.category ?? ""), String(body.filename ?? "")),
+      target: sourceKind === "url"
+        ? costTargets.modelUrl(String(body.sourceUrl ?? ""), String(body.category ?? ""),
+          String(body.filename ?? ""), String(body.sha256 ?? ""))
+        : costTargets.model(String(body.repoId ?? ""), String(body.repoFile ?? ""),
+          String(body.revision ?? "main"), String(body.category ?? ""), String(body.filename ?? "")),
       fileBytes: 0,
       batchCount: 1,
     };
@@ -179,7 +188,7 @@ export async function proxyMeteredModal(c: Context<UserContext>, modalPath: stri
     const status = response.status >= 500 ? "needs-human" : response.ok ? "completed" : "rejected";
     if (replayable) {
       const responseBody = await response.text();
-      if (response.ok && (modalPath === "/workflows" || /^\/workflows\/[a-f0-9]{32}$/.test(modalPath))) {
+      if (response.ok && shouldCacheWorkflowResponse(modalPath)) {
         await upsertCachedWorkflow(c.env, owner(c), JSON.parse(responseBody));
       }
       await c.env.DB.prepare(`UPDATE modal_submissions SET status = ?1, response_status = ?2,

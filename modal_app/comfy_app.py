@@ -40,6 +40,16 @@ from modal_app.object_info_cache import (
     object_info_cache_path,
     previous_object_info_cache_path,
 )
+from modal_app.model_assets import (
+    MODEL_CATEGORIES,
+    apply_model_bindings,
+    list_model_assets,
+    parse_model_bindings,
+    public_model_download_url,
+    require_matching_sha256,
+    validate_expected_sha256,
+    validate_model_download_url,
+)
 from modal_app.registry_install import (
     _install_python_dependencies,
     install_github_node,
@@ -105,6 +115,7 @@ MAX_WORKFLOW_IMAGE_BYTES = 25 * 1024 * 1024
 MAX_RUN_REQUEST_BYTES = 130 * 1024 * 1024
 MAX_ANALYZE_REQUEST_BYTES = 30 * 1024 * 1024
 MAX_JSON_REQUEST_BYTES = 64 * 1024
+MAX_MODEL_DOWNLOAD_BYTES = 100 * 1024 * 1024 * 1024
 MAX_ARTIFACT_TOTAL_BYTES = 2 * 1024 * 1024 * 1024
 ARTIFACT_RETENTION_SECONDS = 7 * 24 * 60 * 60
 COMFY_CPU_STARTUP_TIMEOUT_SECONDS = 540
@@ -537,8 +548,12 @@ class ComfyInspector:
 
     @modal.method()
     def inspect(
-        self, raw_workflow: dict[str, Any], include_workflow: bool = False
+        self,
+        raw_workflow: dict[str, Any],
+        include_workflow: bool = False,
+        model_bindings: list[dict[str, str]] | None = None,
     ) -> dict[str, Any]:
+        model_bindings = parse_model_bindings(model_bindings)
         object_info = self._object_info_data
         installed_nodes = set(object_info)
         variant_candidates: list[dict[str, Any]] = []
@@ -592,6 +607,7 @@ class ComfyInspector:
             object_info,
             compatibility_adjustments,
         )
+        workflow = apply_model_bindings(workflow, model_bindings)
         result = analyze_workflow(
             workflow,
             installed_nodes=installed_nodes,
@@ -612,6 +628,9 @@ class ComfyInspector:
                         candidate["canvas"],
                         object_info,
                         compatibility_adjustments,
+                    )
+                    variant_workflow = apply_model_bindings(
+                        variant_workflow, model_bindings
                     )
                     variant_analysis = analyze_workflow(
                         variant_workflow,
@@ -691,13 +710,18 @@ class ComfyInspector:
         return result
 
     @modal.method()
-    def convert(self, raw_workflow: dict[str, Any]) -> dict[str, Any]:
+    def convert(
+        self,
+        raw_workflow: dict[str, Any],
+        model_bindings: list[dict[str, str]] | None = None,
+    ) -> dict[str, Any]:
         compatibility_adjustments: list[dict[str, str]] = []
         workflow, converted_from_canvas = convert_workflow_document(
             raw_workflow,
             self._object_info_data,
             compatibility_adjustments,
         )
+        workflow = apply_model_bindings(workflow, model_bindings)
         return {
             "workflow": workflow,
             "convertedFromCanvas": converted_from_canvas,
@@ -977,58 +1001,35 @@ class ModelDownloader:
         category: str,
         filename: str,
         revision: str = "main",
+        source_kind: str = "huggingface",
+        source_url: str = "",
+        expected_sha256: str = "",
     ) -> dict[str, Any]:
-        from huggingface_hub import HfApi, hf_hub_download
-
-        if category not in set(MODEL_INPUTS.values()):
+        if category not in MODEL_CATEGORIES:
             raise ValueError("不支持的模型目录")
-        if not safe_model_reference(filename) or not safe_model_reference(repo_file):
+        if not safe_model_reference(filename):
             raise ValueError("模型文件路径不安全")
-        if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repo_id):
-            raise ValueError("Hugging Face 仓库格式应为 owner/repository")
-        if not re.fullmatch(r"[A-Za-z0-9_./-]{1,200}", revision) or ".." in revision.split("/"):
-            raise ValueError("Hugging Face revision 格式不正确")
+        expected_sha256 = validate_expected_sha256(expected_sha256)
+        if source_kind not in {"huggingface", "url"}:
+            raise ValueError("不支持的模型来源")
 
         models.reload()
         target = MODEL_ROOT / category / filename
         target.parent.mkdir(parents=True, exist_ok=True)
-        resolved_repo_file = repo_file
-        try:
-            cached = Path(
-                hf_hub_download(
-                    repo_id=repo_id,
-                    filename=resolved_repo_file,
-                    revision=revision,
-                )
-            )
-        except Exception as error:
-            error_name = type(error).__name__
-            if "EntryNotFound" not in error_name:
-                raise ValueError(
-                    huggingface_download_error_message(
-                        error_name, repo_id, resolved_repo_file, revision
-                    )
-                ) from None
-            try:
-                resolved_repo_file = discover_repository_file(
-                    repo_file,
-                    filename,
-                    HfApi().list_repo_files(repo_id=repo_id, revision=revision),
-                )
-            except ValueError:
-                raise
-            except Exception as discovery_error:
-                raise ValueError(
-                    huggingface_download_error_message(
-                        type(discovery_error).__name__, repo_id, repo_file, revision
-                    )
-                ) from None
-            if resolved_repo_file is None:
-                raise ValueError(
-                    huggingface_download_error_message(
-                        error_name, repo_id, repo_file, revision
-                    )
-                ) from None
+        resolved_repo_file = ""
+        resolved_revision = ""
+        source = None
+        metadata_source: dict[str, Any]
+        if source_kind == "huggingface":
+            from huggingface_hub import HfApi, hf_hub_download
+
+            if not safe_model_reference(repo_file):
+                raise ValueError("模型文件路径不安全")
+            if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repo_id):
+                raise ValueError("Hugging Face 仓库格式应为 owner/repository")
+            if not re.fullmatch(r"[A-Za-z0-9_./-]{1,200}", revision) or ".." in revision.split("/"):
+                raise ValueError("Hugging Face revision 格式不正确")
+            resolved_repo_file = repo_file
             try:
                 cached = Path(
                     hf_hub_download(
@@ -1037,43 +1038,132 @@ class ModelDownloader:
                         revision=revision,
                     )
                 )
-            except Exception as retry_error:
-                raise ValueError(
-                    huggingface_download_error_message(
-                        type(retry_error).__name__,
-                        repo_id,
-                        resolved_repo_file,
-                        revision,
+            except Exception as error:
+                error_name = type(error).__name__
+                if "EntryNotFound" not in error_name:
+                    raise ValueError(
+                        huggingface_download_error_message(
+                            error_name, repo_id, resolved_repo_file, revision
+                        )
+                    ) from None
+                try:
+                    resolved_repo_file = discover_repository_file(
+                        repo_file,
+                        filename,
+                        HfApi().list_repo_files(repo_id=repo_id, revision=revision),
                     )
-                ) from None
-        temporary = target.with_name(f".{target.name}.{uuid.uuid4().hex}.partial")
-        metadata = target.with_name(f".{target.name}.comfy-desk.json")
-        metadata_temporary = metadata.with_name(f".{metadata.name}.{uuid.uuid4().hex}.partial")
-        digest = hashlib.sha256()
-        copied = 0
-        try:
-            with cached.open("rb") as source, temporary.open("xb") as output:
-                while chunk := source.read(8 * 1024 * 1024):
-                    output.write(chunk)
-                    digest.update(chunk)
-                    copied += len(chunk)
-            if copied == 0:
-                raise ValueError("Hugging Face 返回了空模型文件")
+                except ValueError:
+                    raise
+                except Exception as discovery_error:
+                    raise ValueError(
+                        huggingface_download_error_message(
+                            type(discovery_error).__name__, repo_id, repo_file, revision
+                        )
+                    ) from None
+                if resolved_repo_file is None:
+                    raise ValueError(
+                        huggingface_download_error_message(
+                            error_name, repo_id, repo_file, revision
+                        )
+                    ) from None
+                try:
+                    cached = Path(
+                        hf_hub_download(
+                            repo_id=repo_id,
+                            filename=resolved_repo_file,
+                            revision=revision,
+                        )
+                    )
+                except Exception as retry_error:
+                    raise ValueError(
+                        huggingface_download_error_message(
+                            type(retry_error).__name__,
+                            repo_id,
+                            resolved_repo_file,
+                            revision,
+                        )
+                    ) from None
+            source = cached.open("rb")
             resolved_revision = revision
             cached_parts = cached.parts
             if "snapshots" in cached_parts:
                 snapshot_index = cached_parts.index("snapshots")
                 if snapshot_index + 1 < len(cached_parts):
                     resolved_revision = cached_parts[snapshot_index + 1]
+            metadata_source = {
+                "sourceKind": "huggingface",
+                "repoId": repo_id,
+                "requestedRepoFile": repo_file,
+                "repoFile": resolved_repo_file,
+                "requestedRevision": revision,
+                "resolvedRevision": resolved_revision,
+            }
+        else:
+            source_url = validate_model_download_url(source_url)
+
+            class SafeModelRedirectHandler(urllib.request.HTTPRedirectHandler):
+                def redirect_request(self, request, file_pointer, code, message, headers, new_url):
+                    validate_model_download_url(new_url)
+                    return super().redirect_request(
+                        request, file_pointer, code, message, headers, new_url
+                    )
+            try:
+                opener = urllib.request.build_opener(SafeModelRedirectHandler())
+                source = opener.open(
+                    urllib.request.Request(
+                        source_url,
+                        headers={"User-Agent": "LuminaFlow-ModelDownloader/1.0"},
+                    ),
+                    timeout=120,
+                )
+                content_type = source.headers.get_content_type()
+                try:
+                    content_length = int(
+                        source.headers.get("Content-Length", "0") or "0"
+                    )
+                except ValueError:
+                    content_length = 0
+                if content_type == "text/html":
+                    source.close()
+                    source = None
+                    raise ValueError("下载地址返回了网页，不是模型文件")
+                if content_length < 0 or content_length > MAX_MODEL_DOWNLOAD_BYTES:
+                    source.close()
+                    source = None
+                    raise ValueError("模型文件超过 100 GiB 安全上限")
+            except Exception as download_error:
+                if isinstance(download_error, ValueError):
+                    raise
+                raise ValueError(
+                    f"模型下载地址请求失败：{type(download_error).__name__}"
+                ) from None
+            metadata_source = {
+                "sourceKind": "url",
+                "sourceUrl": public_model_download_url(source_url),
+            }
+
+        temporary = target.with_name(f".{target.name}.{uuid.uuid4().hex}.partial")
+        metadata = target.with_name(f".{target.name}.comfy-desk.json")
+        metadata_temporary = metadata.with_name(f".{metadata.name}.{uuid.uuid4().hex}.partial")
+        digest = hashlib.sha256()
+        copied = 0
+        try:
+            with temporary.open("xb") as output:
+                while chunk := source.read(8 * 1024 * 1024):
+                    if copied + len(chunk) > MAX_MODEL_DOWNLOAD_BYTES:
+                        raise ValueError("模型文件超过 100 GiB 安全上限")
+                    output.write(chunk)
+                    digest.update(chunk)
+                    copied += len(chunk)
+            if copied == 0:
+                raise ValueError("远程来源返回了空模型文件")
+            actual_sha256 = digest.hexdigest()
+            require_matching_sha256(actual_sha256, expected_sha256)
             metadata_temporary.write_text(
                 json.dumps(
                     {
-                        "repoId": repo_id,
-                        "requestedRepoFile": repo_file,
-                        "repoFile": resolved_repo_file,
-                        "requestedRevision": revision,
-                        "resolvedRevision": resolved_revision,
-                        "sha256": digest.hexdigest(),
+                        **metadata_source,
+                        "sha256": actual_sha256,
                         "bytes": copied,
                     }
                 ),
@@ -1090,13 +1180,16 @@ class ModelDownloader:
             except Exception:
                 pass
             raise
+        finally:
+            if source is not None:
+                source.close()
         return {
             "status": "installed",
             "path": f"{category}/{filename}",
             "bytes": copied,
             "sha256": digest.hexdigest(),
-            "revision": resolved_revision,
-            "repoFile": resolved_repo_file,
+            **({"revision": resolved_revision, "repoFile": resolved_repo_file}
+               if source_kind == "huggingface" else {"sourceUrl": metadata_source["sourceUrl"]}),
             "assetVersion": _publish_asset_version(),
         }
 
@@ -1340,6 +1433,7 @@ class NodeInstaller:
     volumes={
         str(ARTIFACT_ROOT): artifacts,
         str(WORKFLOW_ROOT): workflow_catalog,
+        str(MODEL_ROOT): models,
     },
     min_containers=0,
     buffer_containers=0,
@@ -1413,17 +1507,24 @@ def api():
         except WorkflowFormatError as error:
             raise HTTPException(status_code=400, detail=str(error)) from error
 
+    def model_bindings_from_form(form: Any) -> list[dict[str, str]]:
+        try:
+            return parse_model_bindings(form.get("modelBindings"))
+        except ValueError as error:
+            raise HTTPException(status_code=400, detail=str(error)) from error
+
     async def analyze_document(
         workflow: dict[str, Any],
         asset_version: str,
         runtime_revision: str,
         *,
         include_workflow: bool = False,
+        model_bindings: list[dict[str, str]] | None = None,
     ) -> dict[str, Any]:
         result = await ComfyInspector(
             asset_version=asset_version,
             runtime_revision=runtime_revision,
-        ).inspect.remote.aio(workflow, include_workflow)
+        ).inspect.remote.aio(workflow, include_workflow, model_bindings)
         missing_nodes = result.get("missingNodes")
         package_hints = result.pop("nodePackageHints", None)
         if isinstance(missing_nodes, list) and missing_nodes:
@@ -1537,10 +1638,16 @@ def api():
         require_request_size(request, MAX_ANALYZE_REQUEST_BYTES)
         form = await request.form()
         workflow = await workflow_from_form(form)
+        model_bindings = model_bindings_from_form(form)
         asset_version = await current_asset_version()
         runtime_revision = await current_runtime_revision()
         try:
-            return await analyze_document(workflow, asset_version, runtime_revision)
+            return await analyze_document(
+                workflow,
+                asset_version,
+                runtime_revision,
+                model_bindings=model_bindings,
+            )
         except Exception as error:
             raise HTTPException(status_code=422, detail=str(error)) from error
 
@@ -1565,6 +1672,7 @@ def api():
         requested_name = str(form.get("name", "")).strip()
         name = requested_name or Path(source_filename).stem or "未命名工作流"
         workflow = await workflow_from_form(form)
+        model_bindings = model_bindings_from_form(form)
         asset_version = await current_asset_version()
         runtime_revision = await current_runtime_revision()
         try:
@@ -1573,6 +1681,7 @@ def api():
                 asset_version,
                 runtime_revision,
                 include_workflow=True,
+                model_bindings=model_bindings,
             )
             if not analysis.get("runnable"):
                 issues = analysis.get("issues")
@@ -1638,6 +1747,7 @@ def api():
         )
         requested_name = str(form.get("name", "")).strip()
         workflow = await workflow_from_form(form)
+        model_bindings = model_bindings_from_form(form)
         asset_version = await current_asset_version()
         runtime_revision = await current_runtime_revision()
         try:
@@ -1646,6 +1756,7 @@ def api():
                 asset_version,
                 runtime_revision,
                 include_workflow=True,
+                model_bindings=model_bindings,
             )
             if not analysis.get("runnable"):
                 raise ValueError(
@@ -1678,6 +1789,19 @@ def api():
     @web.post("/workflows/{workflow_id}/recheck")
     async def recheck_stored_workflow(workflow_id: str, request: Request):
         require_auth(request)
+        require_request_size(request, MAX_JSON_REQUEST_BYTES)
+        body: Any = {}
+        if request.headers.get("content-type", "").startswith("application/json"):
+            try:
+                body = await request.json()
+            except Exception as error:
+                raise HTTPException(status_code=400, detail="请求 JSON 格式不正确") from error
+        try:
+            model_bindings = parse_model_bindings(
+                body.get("modelBindings") if isinstance(body, dict) else None
+            )
+        except ValueError as error:
+            raise HTTPException(status_code=400, detail=str(error)) from error
         await workflow_catalog.reload.aio()
         try:
             stored_manifest, workflow = load_stored_workflow(
@@ -1694,6 +1818,7 @@ def api():
                 asset_version,
                 runtime_revision,
                 include_workflow=True,
+                model_bindings=model_bindings,
             )
             previous_model_sources = {
                 (item.get("category"), item.get("filename")): item.get("source")
@@ -1734,6 +1859,7 @@ def api():
                             asset_version,
                             runtime_revision,
                             include_workflow=True,
+                            model_bindings=model_bindings,
                         )
                     except Exception as variant_error:
                         analysis["issues"].append(
@@ -1845,13 +1971,14 @@ def api():
         require_request_size(request, MAX_ANALYZE_REQUEST_BYTES)
         form = await request.form()
         workflow = await workflow_from_form(form)
+        model_bindings = model_bindings_from_form(form)
         asset_version = await current_asset_version()
         runtime_revision = await current_runtime_revision()
         try:
             result = await ComfyInspector(
                 asset_version=asset_version,
                 runtime_revision=runtime_revision,
-            ).convert.remote.aio(workflow)
+            ).convert.remote.aio(workflow, model_bindings)
             return JSONResponse(
                 result["workflow"],
                 headers={
@@ -1860,6 +1987,12 @@ def api():
             )
         except Exception as error:
             raise HTTPException(status_code=422, detail=str(error)) from error
+
+    @web.get("/resources/models")
+    async def installed_models(request: Request):
+        require_auth(request)
+        await models.reload.aio()
+        return {"models": list_model_assets(MODEL_ROOT)}
 
     @web.post("/resources/models", status_code=202)
     async def install_model(request: Request):
@@ -1873,6 +2006,9 @@ def api():
                 str(body.get("category", "")),
                 str(body.get("filename", "")),
                 str(body.get("revision", "main")),
+                str(body.get("sourceKind", "huggingface")),
+                str(body.get("sourceUrl", "")),
+                str(body.get("sha256", "")),
             )
             return {
                 "jobId": call.object_id,

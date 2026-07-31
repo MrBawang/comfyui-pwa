@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { costTargets } from "../../shared/costs";
 import { CostApprovalError } from "../src/cost-approval";
 import type { Env, UserContext } from "../src/env";
-import { meteredModalDescriptor, proxyMeteredModal } from "../src/modal";
+import { meteredModalDescriptor, proxyMeteredModal, shouldCacheWorkflowResponse } from "../src/modal";
 
 async function sha256(value: string) {
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
@@ -161,5 +161,30 @@ describe("metered Modal workflow descriptors", () => {
       fileBytes: 0,
       batchCount: 1,
     });
+  });
+
+  it("binds direct model downloads to a sanitized URL approval target", async () => {
+    const response = await descriptorApp("/resources/models").request("/descriptor", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        sourceKind: "url",
+        sourceUrl: "https://civitai.com/api/download/models/42?format=SafeTensor&token=secret",
+        category: "checkpoints",
+        filename: "portrait.safetensors",
+        sha256: "a".repeat(64),
+      }),
+    }, {} as Env);
+
+    expect(response.status).toBe(200);
+    const descriptor = await response.json() as { target: string };
+    expect(descriptor.target).toContain("model-url:https://civitai.com/api/download/models/42");
+    expect(descriptor.target).toContain("token=redacted");
+    expect(descriptor.target).not.toContain("secret");
+  });
+
+  it("updates the D1 workflow cache after a successful stored recheck", () => {
+    expect(shouldCacheWorkflowResponse(`/workflows/${"d".repeat(32)}/recheck`)).toBe(true);
+    expect(shouldCacheWorkflowResponse("/resources/models")).toBe(false);
   });
 });

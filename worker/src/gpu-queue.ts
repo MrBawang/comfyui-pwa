@@ -1,6 +1,16 @@
 import type { Env } from "./env";
-import { r2Delete, r2Get, r2Head, r2Put } from "./r2-budget";
-import { contentTypeFilename, id, modalBase, modalHeaders, now, parseJson, safeResponseMessage, storageUsage } from "./utils";
+import { R2BudgetError, r2Delete, r2Get, r2Head, r2Put } from "./r2-budget";
+import {
+  contentTypeFilename,
+  id,
+  modalBase,
+  modalHeaders,
+  modalLlmBase,
+  now,
+  parseJson,
+  safeResponseMessage,
+  storageUsage,
+} from "./utils";
 
 interface RunRow {
   id: string;
@@ -17,6 +27,9 @@ interface RunRow {
   view_id: string | null;
   modal_job_id: string | null;
   cancel_requested: number;
+  priority: number;
+  message: string | null;
+  created_at: number;
 }
 
 interface StoredFile {
@@ -33,15 +46,43 @@ interface ModalJob {
   outputs?: Array<{ index: number; filename: string; mediaType: string; bytes: number }>;
 }
 
-interface ModalLlmLease {
+interface ModalChatJobRow {
+  operation_id: string;
+  owner_email: string;
+  thread_id: string;
+  user_message_id: string;
+  assistant_message_id: string;
+  request_json: string;
+  status: "queued" | "submitting" | "warming" | "generating" | "completed" | "failed" | "needs-human" | "cancelled";
+  modal_job_id: string | null;
+  message: string | null;
+  poll_attempts: number;
+  lease_expires_at: number | null;
+  created_at: number;
+  updated_at: number;
+}
+
+interface ModalChatJob {
+  jobId: string;
+  status: "warming" | "generating" | "succeeded" | "failed" | "cancelled";
+  message?: string;
+  content?: string;
+}
+
+interface ActiveGpuLease {
+  kind: "run" | "chat";
   id: string;
-  expiresAt: number;
+  modalCallId: string;
+  state: string;
+  lastCheckedAt: number;
+  leaseExpiresAt: number;
 }
 
 class PermanentRunError extends Error {}
-const LLM_LEASE_KEY = "modal-llm-lease";
-const LLM_LEASE_MS = 15 * 60 * 1_000;
-const LLM_RELEASE_ATTEMPTS = 3;
+const ACTIVE_GPU_LEASE_KEY = "active-gpu-task";
+const LEASE_RENEW_MS = 2 * 60 * 1_000;
+const AMBIGUOUS_SUBMISSION_GUARD_MS = 15 * 60 * 1_000;
+const OUTPUT_IMPORT_RETRY_LIMIT = 3;
 
 function quoted(value: string) {
   return value.replace(/[\r\n"]/g, "_");
@@ -49,6 +90,18 @@ function quoted(value: string) {
 
 function bytes(value: string) {
   return new TextEncoder().encode(value);
+}
+
+function outputImportAttempts(message: string | null) {
+  const match = message?.match(/生成结果转存失败，正在重试（第 (\d+)\/(\d+) 次）/);
+  return match && Number(match[2]) === OUTPUT_IMPORT_RETRY_LIMIT ? Number(match[1]) : 0;
+}
+
+function permanentlyUnavailableOutput(response: Response) {
+  return response.status >= 400
+    && response.status < 500
+    && response.status !== 408
+    && response.status !== 429;
 }
 
 async function multipartStream(env: Env, fields: Record<string, string>, files: StoredFile[], boundary: string) {
@@ -93,39 +146,11 @@ export async function wakeQueue(env: Env) {
   await stub.fetch("https://queue.internal/wake", { method: "POST" });
 }
 
-export async function acquireModalLlmLease(env: Env) {
-  const leaseId = id();
-  const stub = env.GPU_QUEUE.get(env.GPU_QUEUE.idFromName("global"));
-  const response = await stub.fetch("https://queue.internal/llm/acquire", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ leaseId }),
-  });
-  if (!response.ok) {
-    throw new Error(response.status === 409
-      ? "Modal GPU 正在运行其他任务，请稍后重试；模型不会自动切换"
-      : "Modal GPU 队列暂时不可用");
-  }
-  let released = false;
-  return async () => {
-    if (released) return;
-    let lastError: unknown;
-    for (let attempt = 0; attempt < LLM_RELEASE_ATTEMPTS; attempt += 1) {
-      try {
-        const releaseResponse = await stub.fetch("https://queue.internal/llm/release", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ leaseId }),
-        });
-        if (!releaseResponse.ok) throw new Error(`Modal GPU lease release failed (${releaseResponse.status})`);
-        released = true;
-        return;
-      } catch (error) {
-        lastError = error;
-      }
-    }
-    throw lastError instanceof Error ? lastError : new Error("Modal GPU lease release failed");
-  };
+function modalLlmHeaders(env: Env, extra: HeadersInit = {}) {
+  if (!env.MODAL_LLM_TOKEN) throw new Error("Modal Qwen3.6 令牌尚未配置");
+  const headers = new Headers(extra);
+  headers.set("authorization", `Bearer ${env.MODAL_LLM_TOKEN}`);
+  return headers;
 }
 
 export function pinnedWorkflowFields(run: Pick<RunRow, "workflow_id" | "workflow_revision_id" | "form_json">) {
@@ -147,30 +172,6 @@ export class GpuQueue implements DurableObject {
       await this.ctx.storage.setAlarm(Date.now() + 100);
       return Response.json({ ok: true }, { status: 202 });
     }
-    if (request.method === "POST" && url.pathname === "/llm/acquire") {
-      const body = await request.json().catch(() => ({})) as { leaseId?: string };
-      if (!body.leaseId || !/^[a-f0-9]{32}$/.test(body.leaseId)) {
-        return Response.json({ message: "Invalid lease" }, { status: 400 });
-      }
-      const existing = await this.activeLlmLease();
-      if (existing || this.processing) return Response.json({ message: "GPU busy" }, { status: 409 });
-      const lease = { id: body.leaseId, expiresAt: Date.now() + LLM_LEASE_MS };
-      await this.ctx.storage.put(LLM_LEASE_KEY, lease);
-      if (await this.nextRun()) {
-        await this.ctx.storage.delete(LLM_LEASE_KEY);
-        return Response.json({ message: "GPU busy" }, { status: 409 });
-      }
-      return Response.json({ ok: true, expiresAt: lease.expiresAt }, { status: 201 });
-    }
-    if (request.method === "POST" && url.pathname === "/llm/release") {
-      const body = await request.json().catch(() => ({})) as { leaseId?: string };
-      const existing = await this.activeLlmLease();
-      if (existing?.id === body.leaseId) {
-        await this.ctx.storage.delete(LLM_LEASE_KEY);
-        if (await this.nextRun()) await this.ctx.storage.setAlarm(Date.now() + 100);
-      }
-      return Response.json({ ok: true });
-    }
     return Response.json({ message: "Not found" }, { status: 404 });
   }
 
@@ -184,28 +185,60 @@ export class GpuQueue implements DurableObject {
     }
   }
 
-  private async nextRun() {
-    return this.env.DB.prepare(`SELECT * FROM runs
-      WHERE kind IN ('workflow', 'character') AND (status = 'processing' OR status = 'queued')
-      ORDER BY CASE status WHEN 'processing' THEN 0 ELSE 1 END, priority DESC, created_at
-      LIMIT 1`).first<RunRow>();
+  private async nextTask() {
+    return this.env.DB.prepare(`SELECT kind, id, status FROM (
+      SELECT 'run' AS kind, id, status, created_at, priority,
+        CASE status WHEN 'processing' THEN 0 ELSE 1 END AS phase
+      FROM runs WHERE kind IN ('workflow', 'character') AND status IN ('processing', 'queued')
+      UNION ALL
+      SELECT 'chat' AS kind, operation_id AS id, status, created_at, 0 AS priority,
+        CASE WHEN status IN ('submitting', 'warming', 'generating', 'needs-human') THEN 0 ELSE 1 END AS phase
+      FROM modal_chat_jobs WHERE status IN ('queued', 'submitting', 'warming', 'generating', 'needs-human')
+    ) ORDER BY phase, priority DESC, created_at LIMIT 1`)
+      .first<{ kind: "run" | "chat"; id: string; status: string }>();
   }
 
-  private async activeLlmLease() {
-    const lease = await this.ctx.storage.get<ModalLlmLease>(LLM_LEASE_KEY);
-    if (!lease) return undefined;
-    if (lease.expiresAt > Date.now()) return lease;
-    await this.ctx.storage.delete(LLM_LEASE_KEY);
-    return undefined;
+  private setActiveLease(
+    kind: ActiveGpuLease["kind"],
+    idValue: string,
+    modalCallId: string,
+    state: string,
+    leaseExpiresAt = now() + LEASE_RENEW_MS,
+  ) {
+    const timestamp = now();
+    return this.ctx.storage.put(ACTIVE_GPU_LEASE_KEY, {
+      kind,
+      id: idValue,
+      modalCallId,
+      state,
+      lastCheckedAt: timestamp,
+      leaseExpiresAt,
+    } satisfies ActiveGpuLease);
+  }
+
+  private async clearActiveLease(kind: ActiveGpuLease["kind"], idValue: string) {
+    const lease = await this.ctx.storage.get<ActiveGpuLease>(ACTIVE_GPU_LEASE_KEY);
+    if (lease?.kind === kind && lease.id === idValue) {
+      await this.ctx.storage.delete(ACTIVE_GPU_LEASE_KEY);
+    }
   }
 
   private async advance() {
-    const lease = await this.activeLlmLease();
-    if (lease) {
-      await this.ctx.storage.setAlarm(lease.expiresAt + 100);
+    const task = await this.nextTask();
+    if (!task) {
+      await this.ctx.storage.delete(ACTIVE_GPU_LEASE_KEY);
       return;
     }
-    const run = await this.nextRun();
+    if (task.kind === "chat") {
+      const chat = await this.env.DB.prepare("SELECT * FROM modal_chat_jobs WHERE operation_id = ?1")
+        .bind(task.id).first<ModalChatJobRow>();
+      if (!chat) return;
+      if (chat.status === "queued") await this.submitChat(chat);
+      else await this.pollChat(chat);
+      return;
+    }
+    const run = await this.env.DB.prepare("SELECT * FROM runs WHERE id = ?1")
+      .bind(task.id).first<RunRow>();
     if (!run) return;
     if (run.status === "queued") await this.submit(run);
     else await this.poll(run);
@@ -237,10 +270,11 @@ export class GpuQueue implements DurableObject {
       });
       if (!response.ok) {
         const message = await safeResponseMessage(response, "Modal 任务提交失败");
-        const suffix = response.status === 429 || response.status >= 500
-          ? "；提交结果不明确，需要人工核对，未自动重提"
-          : "";
-        await this.finish(run, "failed", `${message}${suffix}`);
+        if (response.status === 429 || response.status >= 500) {
+          await this.holdAmbiguousRun(run, `${message}；提交结果不明确，需要人工核对，未自动重提`);
+        } else {
+          await this.finish(run, "failed", message);
+        }
         return;
       }
       const body = await response.json() as ModalJob;
@@ -248,27 +282,42 @@ export class GpuQueue implements DurableObject {
       await this.env.DB.prepare(`UPDATE runs SET status = 'processing', modal_job_id = ?1,
         message = ?2, updated_at = ?3 WHERE id = ?4`)
         .bind(body.jobId, body.message ?? "已提交到 Modal", now(), run.id).run();
+      await this.setActiveLease("run", run.id, body.jobId, "processing");
       if (run.view_id) {
         await this.env.DB.prepare("UPDATE batch_views SET status = 'processing', message = ?1, updated_at = ?2 WHERE id = ?3")
           .bind(body.message ?? "云端生成中", now(), run.view_id).run();
       }
       await this.schedule();
     } catch (error) {
-      if (error instanceof PermanentRunError) {
+      if (error instanceof PermanentRunError || error instanceof R2BudgetError) {
         await this.finish(run, "failed", error.message);
         return;
       }
-      await this.finish(run, "failed",
+      await this.holdAmbiguousRun(run,
         `${error instanceof Error ? error.message : "任务提交失败"}；提交结果不明确，需要人工核对，未自动重提`);
     }
   }
 
   private async poll(run: RunRow) {
     if (!run.modal_job_id) {
+      const lease = await this.ctx.storage.get<ActiveGpuLease>(ACTIVE_GPU_LEASE_KEY);
+      if (lease?.kind === "run" && lease.id === run.id && lease.state === "needs-human") {
+        if (lease.leaseExpiresAt > now()) {
+          await this.ctx.storage.setAlarm(lease.leaseExpiresAt + 100);
+          return;
+        }
+        await this.finish(
+          run,
+          "failed",
+          "提交结果不明确；15 分钟费用保护期已结束，请核对 Modal 用量后重新批准",
+        );
+        return;
+      }
       await this.finish(run, "failed", "Modal 任务编号缺失");
       return;
     }
     try {
+      await this.setActiveLease("run", run.id, run.modal_job_id, "processing");
       if (run.cancel_requested) {
         await fetch(`${modalBase(this.env)}/jobs/${encodeURIComponent(run.modal_job_id)}`, {
           method: "DELETE",
@@ -298,20 +347,212 @@ export class GpuQueue implements DurableObject {
         return;
       }
       if (job.status === "succeeded") {
-        await this.importOutputs(run, job);
+        try {
+          await this.importOutputs(run, job);
+        } catch (error) {
+          await this.handleOutputImportFailure(run, error);
+          return;
+        }
         await this.finish(run, "succeeded", job.message ?? "生成完成");
         return;
       }
       await this.finish(run, job.status === "cancelled" ? "cancelled" : "failed", job.message ?? "生成失败");
     } catch (error) {
-      if (error instanceof PermanentRunError) {
-        await this.finish(run, "failed", error.message);
-        return;
-      }
+      const message = error instanceof Error ? error.message : "状态查询失败";
       await this.env.DB.prepare("UPDATE runs SET message = ?1, updated_at = ?2 WHERE id = ?3")
-        .bind(`${error instanceof Error ? error.message : "状态查询失败"}；稍后重试`, now(), run.id).run();
+        .bind(`${message}；稍后重试`, now(), run.id).run();
       await this.schedule(15);
     }
+  }
+
+  private async handleOutputImportFailure(run: RunRow, error: unknown) {
+    if (error instanceof PermanentRunError || error instanceof R2BudgetError) {
+      await this.finish(run, "failed", error.message);
+      return;
+    }
+    const attempts = outputImportAttempts(run.message) + 1;
+    const message = error instanceof Error ? error.message : "生成结果转存失败";
+    if (attempts >= OUTPUT_IMPORT_RETRY_LIMIT) {
+      await this.finish(run, "failed", `生成结果转存失败，已重试 ${OUTPUT_IMPORT_RETRY_LIMIT} 次：${message}`);
+      return;
+    }
+    await this.env.DB.prepare("UPDATE runs SET message = ?1, updated_at = ?2 WHERE id = ?3")
+      .bind(`生成结果转存失败，正在重试（第 ${attempts}/${OUTPUT_IMPORT_RETRY_LIMIT} 次）：${message}`, now(), run.id).run();
+    await this.schedule(15);
+  }
+
+  private async submitChat(job: ModalChatJobRow) {
+    await this.env.DB.batch([
+      this.env.DB.prepare(`UPDATE modal_chat_jobs SET status = 'submitting',
+        message = '正在提交到 Modal', updated_at = ?1 WHERE operation_id = ?2 AND status = 'queued'`)
+        .bind(now(), job.operation_id),
+      this.env.DB.prepare("UPDATE modal_submissions SET status = 'submitting', updated_at = ?1 WHERE id = ?2")
+        .bind(now(), job.operation_id),
+    ]);
+    try {
+      const response = await fetch(`${modalLlmBase(this.env)}/jobs`, {
+        method: "POST",
+        headers: modalLlmHeaders(this.env, { "content-type": "application/json" }),
+        body: JSON.stringify({
+          operationId: job.operation_id,
+          payload: parseJson<Record<string, unknown>>(job.request_json, {}),
+        }),
+      });
+      if (!response.ok) {
+        const message = await safeResponseMessage(response, "Modal 对话任务提交失败");
+        await this.finishChat(job, response.status >= 500 ? "needs-human" : "failed",
+          response.status >= 500 ? `${message}；提交结果不明确，未自动重提` : message);
+        return;
+      }
+      const body = await response.json() as ModalChatJob;
+      if (!body.jobId) throw new Error("Modal 没有返回对话任务编号");
+      const timestamp = now();
+      await this.env.DB.prepare(`UPDATE modal_chat_jobs SET status = 'warming', modal_job_id = ?1,
+        message = ?2, poll_attempts = 0, lease_expires_at = ?3, updated_at = ?4
+        WHERE operation_id = ?5 AND status = 'submitting'`)
+        .bind(body.jobId, body.message ?? "正在启动 GPU", timestamp + LEASE_RENEW_MS, timestamp, job.operation_id).run();
+      await this.setActiveLease("chat", job.operation_id, body.jobId, "warming");
+      await this.schedule(2);
+    } catch (error) {
+      await this.finishChat(job, "needs-human",
+        `${error instanceof Error ? error.message : "Modal 对话任务提交失败"}；提交结果不明确，未自动重提`);
+    }
+  }
+
+  private async holdAmbiguousRun(run: RunRow, message: string) {
+    const timestamp = now();
+    const guardUntil = timestamp + AMBIGUOUS_SUBMISSION_GUARD_MS;
+    await this.env.DB.prepare(`UPDATE runs SET status = 'processing', message = ?1,
+      updated_at = ?2 WHERE id = ?3 AND status = 'queued'`)
+      .bind(message, timestamp, run.id).run();
+    if (run.view_id) {
+      await this.env.DB.prepare(`UPDATE batch_views SET status = 'processing', message = ?1,
+        updated_at = ?2 WHERE id = ?3`)
+        .bind(message, timestamp, run.view_id).run();
+    }
+    await this.setActiveLease("run", run.id, "unknown", "needs-human", guardUntil);
+    await this.ctx.storage.setAlarm(guardUntil + 100);
+  }
+
+  private async pollChat(job: ModalChatJobRow) {
+    if (job.status === "needs-human") {
+      const guardUntil = Number(job.lease_expires_at ?? 0);
+      if (guardUntil > now()) {
+        await this.ctx.storage.setAlarm(guardUntil + 100);
+        return;
+      }
+      const timestamp = now();
+      const message = "提交结果不明确；15 分钟费用保护期已结束，请核对 Modal 用量后重新批准";
+      await this.env.DB.batch([
+        this.env.DB.prepare(`UPDATE modal_chat_jobs SET status = 'failed', message = ?1,
+          lease_expires_at = NULL, updated_at = ?2 WHERE operation_id = ?3 AND status = 'needs-human'`)
+          .bind(message, timestamp, job.operation_id),
+        this.env.DB.prepare(`UPDATE modal_submissions SET status = 'rejected', message = ?1,
+          updated_at = ?2 WHERE id = ?3 AND status = 'needs-human'`)
+          .bind(message, timestamp, job.operation_id),
+      ]);
+      await this.clearActiveLease("chat", job.operation_id);
+      await this.scheduleNext();
+      return;
+    }
+    if (!job.modal_job_id) {
+      await this.finishChat(job, "needs-human", "Modal 对话任务编号缺失；未自动重提");
+      return;
+    }
+    try {
+      await this.setActiveLease("chat", job.operation_id, job.modal_job_id, job.status);
+      const response = await fetch(
+        `${modalLlmBase(this.env)}/jobs/${encodeURIComponent(job.modal_job_id)}`,
+        { headers: modalLlmHeaders(this.env) },
+      );
+      if (!response.ok && response.status !== 202) {
+        if (response.status === 404) {
+          await this.finishChat(job, "needs-human", "Modal 对话任务不存在或已经过期；未自动重提");
+          return;
+        }
+        await this.deferChatPoll(job, await safeResponseMessage(response, "状态查询失败"));
+        return;
+      }
+      const result = await response.json() as ModalChatJob;
+      if (response.status === 202 || result.status === "warming" || result.status === "generating") {
+        const status = result.status === "generating" ? "generating" : "warming";
+        const timestamp = now();
+        await this.env.DB.prepare(`UPDATE modal_chat_jobs SET status = ?1, message = ?2,
+          poll_attempts = poll_attempts + 1, lease_expires_at = ?3, updated_at = ?4
+          WHERE operation_id = ?5`)
+          .bind(status, result.message ?? (status === "warming" ? "正在启动 GPU" : "正在生成回复"),
+            timestamp + LEASE_RENEW_MS, timestamp, job.operation_id).run();
+        await this.setActiveLease("chat", job.operation_id, job.modal_job_id, status);
+        await this.schedule(Math.min(15, Math.max(2, 2 + job.poll_attempts * 2)));
+        return;
+      }
+      if (result.status === "succeeded" && result.content?.trim()) {
+        await this.completeChat(job, result.content);
+        return;
+      }
+      await this.finishChat(job, result.status === "cancelled" ? "cancelled" : "failed",
+        result.message ?? "Modal 对话生成失败");
+    } catch (error) {
+      await this.deferChatPoll(job, error instanceof Error ? error.message : "状态查询失败");
+    }
+  }
+
+  private async deferChatPoll(job: ModalChatJobRow, message: string) {
+    const timestamp = now();
+    await this.env.DB.prepare(`UPDATE modal_chat_jobs SET message = ?1, poll_attempts = poll_attempts + 1,
+      lease_expires_at = ?2, updated_at = ?3 WHERE operation_id = ?4`)
+      .bind(`${message}；仅重试状态查询，不会重新生成`, timestamp + LEASE_RENEW_MS, timestamp, job.operation_id).run();
+    if (job.modal_job_id) await this.setActiveLease("chat", job.operation_id, job.modal_job_id, job.status);
+    await this.schedule(15);
+  }
+
+  private async completeChat(job: ModalChatJobRow, content: string) {
+    const timestamp = now();
+    await this.env.DB.batch([
+      this.env.DB.prepare(`INSERT OR IGNORE INTO chat_messages
+        (id, thread_id, role, content, provider_id, created_at)
+        VALUES (?1, ?2, 'assistant', ?3, 'modal-qwen36', ?4)`)
+        .bind(job.assistant_message_id, job.thread_id, content, timestamp),
+      this.env.DB.prepare("UPDATE chat_threads SET updated_at = ?1 WHERE id = ?2")
+        .bind(timestamp, job.thread_id),
+      this.env.DB.prepare(`UPDATE modal_chat_jobs SET status = 'completed', message = '回复生成完成',
+        lease_expires_at = NULL, updated_at = ?1 WHERE operation_id = ?2`)
+        .bind(timestamp, job.operation_id),
+      this.env.DB.prepare(`UPDATE modal_submissions SET status = 'completed', response_status = 200,
+        response_content_type = 'application/json', response_body = ?1, message = NULL, updated_at = ?2
+        WHERE id = ?3`)
+        .bind(JSON.stringify({ messageId: job.assistant_message_id }), timestamp, job.operation_id),
+    ]);
+    await this.clearActiveLease("chat", job.operation_id);
+    await this.scheduleNext();
+  }
+
+  private async finishChat(
+    job: ModalChatJobRow,
+    status: "failed" | "needs-human" | "cancelled",
+    message: string,
+  ) {
+    const timestamp = now();
+    const submissionStatus = status === "failed" || status === "cancelled" ? "rejected" : "needs-human";
+    const guardUntil = status === "needs-human" ? timestamp + AMBIGUOUS_SUBMISSION_GUARD_MS : null;
+    await this.env.DB.batch([
+      this.env.DB.prepare(`UPDATE modal_chat_jobs SET status = ?1, message = ?2,
+        lease_expires_at = ?3, updated_at = ?4 WHERE operation_id = ?5`)
+        .bind(status, message, guardUntil, timestamp, job.operation_id),
+      this.env.DB.prepare("UPDATE modal_submissions SET status = ?1, message = ?2, updated_at = ?3 WHERE id = ?4")
+        .bind(submissionStatus, message, timestamp, job.operation_id),
+    ]);
+    if (status === "needs-human") {
+      await this.setActiveLease("chat", job.operation_id, job.modal_job_id ?? "unknown", status, guardUntil!);
+      await this.ctx.storage.setAlarm(guardUntil! + 100);
+    } else {
+      await this.clearActiveLease("chat", job.operation_id);
+      await this.scheduleNext();
+    }
+  }
+
+  private async scheduleNext() {
+    if (await this.nextTask()) await this.ctx.storage.setAlarm(Date.now() + 100);
   }
 
   private async importOutputs(run: RunRow, job: ModalJob) {
@@ -327,7 +568,11 @@ export class GpuQueue implements DurableObject {
         `${modalBase(this.env)}/jobs/${encodeURIComponent(run.modal_job_id)}/results/${outputIndex}`,
         { headers: modalHeaders(this.env) },
       );
-      if (!response.ok || !response.body) throw new Error(await safeResponseMessage(response, "生成结果下载失败"));
+      if (!response.ok || !response.body) {
+        const message = await safeResponseMessage(response, "生成结果下载失败");
+        if (permanentlyUnavailableOutput(response)) throw new PermanentRunError(message);
+        throw new Error(message);
+      }
       const mediaType = response.headers.get("content-type")?.split(";")[0] || output.mediaType || "application/octet-stream";
       const filename = contentTypeFilename(mediaType, output.filename || `output-${outputIndex}`);
       const objectKey = `runs/${run.id}/outputs/${outputIndex}-${filename.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
@@ -399,8 +644,8 @@ export class GpuQueue implements DurableObject {
       await this.refreshBatch(run.batch_id, run.project_id);
     }
     await this.cleanupInputs(run);
-    const next = await this.nextRun();
-    if (next) await this.ctx.storage.setAlarm(Date.now() + 100);
+    await this.clearActiveLease("run", run.id);
+    await this.scheduleNext();
   }
 
   private async cleanupInputs(run: RunRow) {

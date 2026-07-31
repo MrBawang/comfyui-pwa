@@ -12,6 +12,26 @@ export interface WorkflowModel {
   };
 }
 
+export interface ModelBinding {
+  category: string;
+  expectedFilename: string;
+  actualFilename: string;
+}
+
+export interface ModelAsset {
+  category: string;
+  filename: string;
+  bytes: number;
+  modifiedAt: number;
+  source?: {
+    sourceKind?: "huggingface" | "url" | "unknown";
+    repoId?: string;
+    repoFile?: string;
+    sourceUrl?: string;
+    sha256?: string;
+  };
+}
+
 export interface WorkflowImageInput {
   nodeId: string;
   classType: string;

@@ -1,12 +1,20 @@
 import { Hono } from "hono";
 import type { Context } from "hono";
 
-import type { ChatMessage, ChatMode, ChatThread, ProviderId, SystemPromptPreset } from "../../shared/contracts";
+import type {
+  ChatMessage,
+  ChatMode,
+  ChatOperation,
+  ChatOperationStatus,
+  ChatThread,
+  ProviderId,
+  SystemPromptPreset,
+} from "../../shared/contracts";
 import { costTargets } from "../../shared/costs";
 import { consumeCostApproval, CostApprovalError, requireIdempotencyKey } from "./cost-approval";
 import type { UserContext } from "./env";
-import { acquireModalLlmLease } from "./gpu-queue";
-import { MAX_SYSTEM_PROMPT_CHARS, MAX_SYSTEM_PROMPT_TOKENS, id, jsonError, now, owner } from "./utils";
+import { wakeQueue } from "./gpu-queue";
+import { MAX_SYSTEM_PROMPT_CHARS, MAX_SYSTEM_PROMPT_TOKENS, id, jsonError, modalLlmBase, now, owner } from "./utils";
 
 interface ThreadRow {
   id: string;
@@ -50,7 +58,16 @@ interface ModalChatSubmissionRow {
   message: string | null;
 }
 
-const MODAL_WARMUP_RETRY_STATUSES = new Set([408, 425, 429, 500, 502, 503, 504, 522, 523, 524]);
+interface ModalChatJobRow {
+  operation_id: string;
+  thread_id: string;
+  user_message_id: string;
+  assistant_message_id: string;
+  status: ChatOperationStatus;
+  message: string | null;
+  created_at: number;
+  updated_at: number;
+}
 
 function thread(row: ThreadRow): ChatThread {
   return {
@@ -77,6 +94,22 @@ function message(row: MessageRow): ChatMessage {
     content: row.content,
     providerId: row.provider_id ?? undefined,
     createdAt: row.created_at,
+  };
+}
+
+async function chatOperation(c: Context<UserContext>, row: ModalChatJobRow): Promise<ChatOperation> {
+  const assistant = row.status === "completed"
+    ? await c.env.DB.prepare("SELECT * FROM chat_messages WHERE id = ?1 AND thread_id = ?2")
+      .bind(row.assistant_message_id, row.thread_id).first<MessageRow>()
+    : undefined;
+  return {
+    id: row.operation_id,
+    threadId: row.thread_id,
+    status: row.status,
+    message: row.message ?? undefined,
+    assistantMessage: assistant ? message(assistant) : undefined,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
   };
 }
 
@@ -139,9 +172,15 @@ async function releaseWorkersAiReservation(
 }
 
 function availableProviders(c: { env: UserContext["Bindings"] }) {
+  let modalAvailable = Boolean(c.env.MODAL_LLM_TOKEN);
+  try {
+    modalLlmBase(c.env);
+  } catch {
+    modalAvailable = false;
+  }
   return [
     { id: "workers-ai" as const, label: "Workers AI", model: c.env.WORKERS_AI_MODEL, available: Boolean(c.env.AI) },
-    { id: "modal-qwen36" as const, label: "Qwen3.6 · Modal · 64K", model: "Q6 / Q5 / Q4 · 64K", available: Boolean(c.env.MODAL_LLM_URL && c.env.MODAL_LLM_TOKEN) },
+    { id: "modal-qwen36" as const, label: "Qwen3.6 · Modal · 64K", model: "Q6 / Q5 / Q4 · 64K", available: modalAvailable },
   ];
 }
 
@@ -156,15 +195,28 @@ async function modalChatSubmission(c: Context<UserContext>, idempotencyKey: stri
     .bind(owner(c), idempotencyKey).first<ModalChatSubmissionRow>();
 }
 
-function replayModalChat(c: Context<UserContext>, row: ModalChatSubmissionRow) {
-  const message = row.status === "needs-human"
+async function replayModalChat(c: Context<UserContext>, row: ModalChatSubmissionRow) {
+  const job = await c.env.DB.prepare("SELECT * FROM modal_chat_jobs WHERE operation_id = ?1 AND owner_email = ?2")
+    .bind(row.id, owner(c)).first<ModalChatJobRow>();
+  if (job) {
+    const operation = await chatOperation(c, job);
+    const user = await c.env.DB.prepare("SELECT * FROM chat_messages WHERE id = ?1 AND thread_id = ?2")
+      .bind(job.user_message_id, job.thread_id).first<MessageRow>();
+    const active = ["queued", "submitting", "warming", "generating"].includes(operation.status);
+    if (active) c.executionCtx.waitUntil(wakeQueue(c.env));
+    return c.json({
+      operation,
+      userMessage: user ? message(user) : undefined,
+      message: operation.message,
+    },
+      active ? 202 : operation.status === "completed" ? 200 : 409);
+  }
+  const detail = row.status === "needs-human"
     ? row.message || "上次 Modal 对话结果不明确，需要人工核对后重新批准"
     : row.status === "completed"
       ? "相同的 Modal 对话请求已经完成，不会再次启动 GPU"
-      : row.status === "rejected"
-        ? row.message || "相同的 Modal 对话请求已经被拒绝"
-        : "相同的 Modal 对话请求已经提交或正在处理，不会重复启动 GPU";
-  return c.json({ operationId: row.id, status: row.status, message }, 409);
+      : row.message || "相同的 Modal 对话请求已经被拒绝";
+  return c.json({ operationId: row.id, status: row.status, message: detail }, 409);
 }
 
 async function resolveSystemPrompt(c: Context<UserContext>, row: ThreadRow) {
@@ -259,37 +311,6 @@ function providerDelta(payload: string) {
   }
 }
 
-function modalLlmBaseUrl(url: string) {
-  return url.replace(/\/$/, "").replace(/\/v1\/chat\/completions$/, "");
-}
-
-export async function warmModalLlm(
-  env: Pick<UserContext["Bindings"], "MODAL_LLM_URL" | "MODAL_LLM_TOKEN">,
-  signal: AbortSignal,
-  fetcher: typeof fetch = fetch,
-) {
-  if (!env.MODAL_LLM_URL || !env.MODAL_LLM_TOKEN) throw new Error("Modal Qwen3.6 尚未部署");
-  const url = `${modalLlmBaseUrl(env.MODAL_LLM_URL)}/health`;
-  let lastStatus: number | undefined;
-  for (let attempt = 0; attempt < 2; attempt += 1) {
-    try {
-      const response = await fetcher(url, {
-        method: "GET",
-        signal,
-        headers: { authorization: `Bearer ${env.MODAL_LLM_TOKEN}` },
-      });
-      if (response.ok) return;
-      lastStatus = response.status;
-      await response.body?.cancel().catch(() => undefined);
-      if (!MODAL_WARMUP_RETRY_STATUSES.has(response.status)) break;
-    } catch (error) {
-      if (signal.aborted) throw error;
-      if (attempt === 1) throw new Error("Modal Qwen3.6 冷启动连接失败");
-    }
-  }
-  throw new Error(`Modal Qwen3.6 冷启动失败${lastStatus ? `（${lastStatus}）` : ""}`);
-}
-
 export function modalChatPayload(
   mode: ChatMode,
   messages: Array<{ role: string; content: string }>,
@@ -303,31 +324,6 @@ export function modalChatPayload(
     temperature: mode === "prompt" ? 0.55 : 0.7,
     chat_template_kwargs: { enable_thinking: false },
   };
-}
-
-async function providerStream(
-  c: Context<UserContext>,
-  row: ThreadRow,
-  messages: Array<{ role: string; content: string }>,
-  signal: AbortSignal,
-) {
-  const maxTokens = row.mode === "prompt" ? 1_024 : 2_048;
-  if (row.provider_id === "workers-ai") {
-    return workersAiStream(c.env, messages, maxTokens, row.mode === "prompt" ? 0.55 : 0.7, signal);
-  }
-  if (!c.env.MODAL_LLM_URL || !c.env.MODAL_LLM_TOKEN) throw new Error("Modal Qwen3.6 尚未部署");
-  const url = `${modalLlmBaseUrl(c.env.MODAL_LLM_URL)}/v1/chat/completions`;
-  const response = await fetch(url, {
-    method: "POST",
-    signal,
-    headers: {
-      authorization: `Bearer ${c.env.MODAL_LLM_TOKEN}`,
-      "content-type": "application/json",
-    },
-    body: JSON.stringify(modalChatPayload(row.mode, messages, maxTokens)),
-  });
-  if (!response.ok || !response.body) throw new Error(`Modal Qwen3.6 请求失败（${response.status}）`);
-  return response.body;
 }
 
 export async function workersAiStream(
@@ -466,7 +462,7 @@ chatRoutes.get("/api/chat/threads", async (c) => {
 chatRoutes.post("/api/chat/threads", async (c) => {
   const body = await c.req.json<Partial<ChatThread>>();
   const mode = body.mode === "prompt" ? "prompt" : "chat";
-  const modalAvailable = Boolean(c.env.MODAL_LLM_URL && c.env.MODAL_LLM_TOKEN);
+  const modalAvailable = availableProviders(c).some((provider) => provider.id === "modal-qwen36" && provider.available);
   const providerId = body.providerId ?? (mode === "prompt" && modalAvailable ? "modal-qwen36" : "workers-ai");
   const provider = availableProviders(c).find((item) => item.id === providerId);
   if (!provider?.available) return jsonError(c, `${provider?.label ?? "模型"}尚未配置`, 503);
@@ -510,7 +506,27 @@ chatRoutes.get("/api/chat/threads/:threadId", async (c) => {
   if (!row) return jsonError(c, "对话不存在", 404);
   const messages = await c.env.DB.prepare("SELECT * FROM chat_messages WHERE thread_id = ?1 ORDER BY created_at")
     .bind(row.id).all<MessageRow>();
-  return c.json({ thread: thread(row), messages: messages.results.map(message) });
+  const latestJob = await c.env.DB.prepare(`SELECT * FROM modal_chat_jobs
+    WHERE thread_id = ?1 AND owner_email = ?2 ORDER BY created_at DESC LIMIT 1`)
+    .bind(row.id, owner(c)).first<ModalChatJobRow>();
+  return c.json({
+    thread: thread(row),
+    messages: messages.results.map(message),
+    operation: latestJob && latestJob.status !== "completed"
+      ? await chatOperation(c, latestJob)
+      : undefined,
+  });
+});
+
+chatRoutes.get("/api/chat/operations/:operationId", async (c) => {
+  const job = await c.env.DB.prepare(
+    "SELECT * FROM modal_chat_jobs WHERE operation_id = ?1 AND owner_email = ?2",
+  ).bind(c.req.param("operationId"), owner(c)).first<ModalChatJobRow>();
+  if (!job) return jsonError(c, "对话任务不存在", 404);
+  if (["queued", "submitting", "warming", "generating"].includes(job.status)) {
+    c.executionCtx.waitUntil(wakeQueue(c.env));
+  }
+  return c.json({ operation: await chatOperation(c, job) });
 });
 
 chatRoutes.patch("/api/chat/threads/:threadId", async (c) => {
@@ -530,6 +546,11 @@ chatRoutes.patch("/api/chat/threads/:threadId", async (c) => {
 });
 
 chatRoutes.delete("/api/chat/threads/:threadId", async (c) => {
+  const active = await c.env.DB.prepare(`SELECT operation_id FROM modal_chat_jobs
+    WHERE thread_id = ?1 AND owner_email = ?2
+      AND status IN ('queued', 'submitting', 'warming', 'generating', 'needs-human') LIMIT 1`)
+    .bind(c.req.param("threadId"), owner(c)).first();
+  if (active) return jsonError(c, "当前会话仍有 Modal 任务，完成或保护期结束后才能删除", 409);
   await c.env.DB.prepare("DELETE FROM chat_threads WHERE id = ?1 AND owner_email = ?2")
     .bind(c.req.param("threadId"), owner(c)).run();
   return c.json({ ok: true });
@@ -547,16 +568,7 @@ chatRoutes.post("/api/chat/threads/:threadId/messages", async (c) => {
     const contextLabel = row.provider_id === "modal-qwen36" ? "Modal 64K" : "Workers AI";
     return jsonError(c, `消息与系统提示词合计超过 ${contextLabel} 上下文预算，请缩短内容`);
   }
-  let releaseModalGpu: (() => Promise<void>) | undefined;
   let workersReservation: { inputTokens: number; reservedNeurons: number; usageDate: string } | undefined;
-  let modalOperationId: string | undefined;
-  let modalIdempotencyKey: string | undefined;
-  const modalDescriptor = {
-    action: "modal-chat" as const,
-    target: costTargets.modalChat(row.id),
-    fileBytes: new TextEncoder().encode(content).byteLength,
-    batchCount: 1,
-  };
   const previous = await c.env.DB.prepare("SELECT * FROM chat_messages WHERE thread_id = ?1 ORDER BY created_at")
     .bind(row.id).all<MessageRow>();
   const pendingUser: MessageRow = {
@@ -569,10 +581,20 @@ chatRoutes.post("/api/chat/threads/:threadId/messages", async (c) => {
   };
   const providerMessages = modelMessages(systemPrompt, [...previous.results, pendingUser], inputTokenBudget);
   if (row.provider_id === "modal-qwen36") {
-    modalIdempotencyKey = requireIdempotencyKey(c);
+    const modalIdempotencyKey = requireIdempotencyKey(c);
     const existing = await modalChatSubmission(c, modalIdempotencyKey);
     if (existing) return replayModalChat(c, existing);
-    modalOperationId = id();
+    const activeJob = await c.env.DB.prepare(`SELECT operation_id FROM modal_chat_jobs
+      WHERE thread_id = ?1 AND owner_email = ?2 AND status IN ('queued', 'submitting', 'warming', 'generating', 'needs-human')
+      LIMIT 1`).bind(row.id, owner(c)).first();
+    if (activeJob) return jsonError(c, "当前会话已有 Modal 回复正在处理，请等待完成", 409);
+    const modalOperationId = id();
+    const modalDescriptor = {
+      action: "modal-chat" as const,
+      target: costTargets.modalChat(row.id),
+      fileBytes: new TextEncoder().encode(content).byteLength,
+      batchCount: 1,
+    };
     try {
       await c.env.DB.prepare(`INSERT INTO modal_submissions
         (id, owner_email, action, idempotency_key, target_hash, status, created_at, updated_at)
@@ -585,27 +607,52 @@ chatRoutes.post("/api/chat/threads/:threadId/messages", async (c) => {
     }
     try {
       const approval = await consumeCostApproval(c, modalDescriptor);
-      releaseModalGpu = await acquireModalLlmLease(c.env);
-      await c.env.DB.prepare(`UPDATE modal_submissions SET status = 'submitting', quote_id = ?1,
-        target_hash = ?2, updated_at = ?3 WHERE id = ?4 AND status = 'pending'`)
-        .bind(approval.quoteId, approval.targetHash, now(), modalOperationId).run();
+      const timestamp = now();
+      const assistantMessageId = id();
+      const requestJson = JSON.stringify({
+        ...modalChatPayload(row.mode, providerMessages, row.mode === "prompt" ? 1_024 : 2_048),
+        stream: false,
+      });
+      await c.env.DB.batch([
+        c.env.DB.prepare(`INSERT INTO chat_messages (id, thread_id, role, content, created_at)
+          VALUES (?1, ?2, 'user', ?3, ?4)`).bind(pendingUser.id, row.id, content, timestamp),
+        c.env.DB.prepare("UPDATE chat_threads SET updated_at = ?1 WHERE id = ?2").bind(timestamp, row.id),
+        c.env.DB.prepare(`INSERT INTO modal_chat_jobs
+          (operation_id, owner_email, thread_id, user_message_id, assistant_message_id, request_json,
+            status, message, created_at, updated_at)
+          VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'queued', '等待 Modal GPU 队列', ?7, ?7)`)
+          .bind(modalOperationId, owner(c), row.id, pendingUser.id, assistantMessageId, requestJson, timestamp),
+        c.env.DB.prepare(`UPDATE modal_submissions SET status = 'submitting', quote_id = ?1,
+          target_hash = ?2, updated_at = ?3 WHERE id = ?4 AND status = 'pending'`)
+          .bind(approval.quoteId, approval.targetHash, timestamp, modalOperationId),
+      ]);
+      try {
+        await wakeQueue(c.env);
+      } catch {
+        await c.env.DB.prepare("UPDATE modal_chat_jobs SET message = ?1, updated_at = ?2 WHERE operation_id = ?3")
+          .bind("队列暂时无法唤醒；页面查询状态时会继续恢复", now(), modalOperationId).run();
+      }
+      const queued = await c.env.DB.prepare("SELECT * FROM modal_chat_jobs WHERE operation_id = ?1")
+        .bind(modalOperationId).first<ModalChatJobRow>();
+      return c.json({
+        operation: await chatOperation(c, queued!),
+        userMessage: message(pendingUser),
+      }, 202);
     } catch (error) {
-      await releaseModalGpu?.().catch(() => undefined);
       if (error instanceof CostApprovalError) {
         await c.env.DB.prepare("DELETE FROM modal_submissions WHERE id = ?1 AND status = 'pending'")
           .bind(modalOperationId).run();
         throw error;
       }
       await c.env.DB.prepare(`UPDATE modal_submissions SET status = 'rejected', message = ?1,
-        updated_at = ?2 WHERE id = ?3`).bind(error instanceof Error ? error.message : "Modal GPU 队列暂时不可用", now(), modalOperationId).run();
-      return jsonError(c, error instanceof Error ? error.message : "Modal GPU 队列暂时不可用", 409);
+        updated_at = ?2 WHERE id = ?3`).bind(error instanceof Error ? error.message : "Modal 对话入队失败", now(), modalOperationId).run();
+      return jsonError(c, error instanceof Error ? error.message : "Modal 对话入队失败", 500);
     }
-  } else {
-    try {
-      workersReservation = await reserveWorkersAi(c.env, owner(c), providerMessages, row.mode === "prompt" ? 1_024 : 2_048);
-    } catch (error) {
-      return jsonError(c, error instanceof Error ? error.message : "Workers AI 今日额度不足", 429);
-    }
+  }
+  try {
+    workersReservation = await reserveWorkersAi(c.env, owner(c), providerMessages, row.mode === "prompt" ? 1_024 : 2_048);
+  } catch (error) {
+    return jsonError(c, error instanceof Error ? error.message : "Workers AI 今日额度不足", 429);
   }
   const userMessageId = pendingUser.id;
   const timestamp = now();
@@ -616,12 +663,7 @@ chatRoutes.post("/api/chat/threads/:threadId/messages", async (c) => {
       c.env.DB.prepare("UPDATE chat_threads SET updated_at = ?1 WHERE id = ?2").bind(timestamp, row.id),
     ]);
   } catch (error) {
-    await releaseModalGpu?.();
     await releaseWorkersAiReservation(c.env, owner(c), workersReservation);
-    if (modalOperationId) {
-      await c.env.DB.prepare(`UPDATE modal_submissions SET status = 'rejected', message = ?1,
-        updated_at = ?2 WHERE id = ?3`).bind(error instanceof Error ? error.message : "对话消息保存失败", now(), modalOperationId).run();
-    }
     throw error;
   }
   const stream = new TransformStream<Uint8Array, Uint8Array>();
@@ -631,17 +673,18 @@ chatRoutes.post("/api/chat/threads/:threadId/messages", async (c) => {
   const send = (event: string, data: unknown) => writer.write(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
   const providerTask = (async () => {
     let assistant = "";
-    let modalGenerationStarted = false;
-    const providerTimeout = row.provider_id === "modal-qwen36"
-      ? setTimeout(() => providerAbort.abort(new Error("Modal Qwen3.6 请求超过 GPU 租约时限")), 14 * 60 * 1_000)
-      : setTimeout(() => providerAbort.abort(new Error("Workers AI 请求超过 90 秒，已停止等待")), 90 * 1_000);
+    const providerTimeout = setTimeout(
+      () => providerAbort.abort(new Error("Workers AI 请求超过 90 秒，已停止等待")),
+      90 * 1_000,
+    );
     try {
-      if (row.provider_id === "modal-qwen36") {
-        await send("status", { message: "正在启动 Modal Qwen3.6" });
-        await warmModalLlm(c.env, providerAbort.signal);
-        modalGenerationStarted = true;
-      }
-      const source = await providerStream(c, row, providerMessages, providerAbort.signal);
+      const source = await workersAiStream(
+        c.env,
+        providerMessages,
+        row.mode === "prompt" ? 1_024 : 2_048,
+        row.mode === "prompt" ? 0.55 : 0.7,
+        providerAbort.signal,
+      );
       await consumeProviderStream(source, async (delta) => {
         assistant += delta;
         await send("delta", { content: delta });
@@ -654,11 +697,6 @@ chatRoutes.post("/api/chat/threads/:threadId/messages", async (c) => {
           .bind(assistantMessageId, row.id, assistant, row.provider_id, now()),
         c.env.DB.prepare("UPDATE chat_threads SET updated_at = ?1 WHERE id = ?2").bind(now(), row.id),
       ]);
-      if (modalOperationId) {
-        await c.env.DB.prepare(`UPDATE modal_submissions SET status = 'completed', response_status = 200,
-          response_content_type = 'application/json', response_body = ?1, message = NULL, updated_at = ?2
-          WHERE id = ?3`).bind(JSON.stringify({ messageId: assistantMessageId }), now(), modalOperationId).run();
-      }
       if (row.provider_id === "workers-ai") {
         const inputTokens = workersReservation?.inputTokens
           ?? providerMessages.reduce((total, item) => total + estimatedTokens(item.content), 0);
@@ -681,19 +719,9 @@ chatRoutes.post("/api/chat/threads/:threadId/messages", async (c) => {
         created_at: now(),
       }) });
     } catch (error) {
-      if (modalOperationId) {
-        const suffix = modalGenerationStarted
-          ? "；结果不明确，未自动重提"
-          : "；生成尚未开始，可以重新批准后再试";
-        const status = modalGenerationStarted ? "needs-human" : "rejected";
-        const message = `${error instanceof Error ? error.message : "Modal 对话失败"}${suffix}`;
-        await c.env.DB.prepare(`UPDATE modal_submissions SET status = ?1, message = ?2,
-          updated_at = ?3 WHERE id = ?4`).bind(status, message, now(), modalOperationId).run();
-      }
       await send("error", { message: error instanceof Error ? error.message : "模型请求失败" }).catch(() => undefined);
     } finally {
       clearTimeout(providerTimeout);
-      await releaseModalGpu?.().catch(() => undefined);
       await releaseWorkersAiReservation(c.env, owner(c), workersReservation).catch(() => undefined);
       await writer.close().catch(() => undefined);
     }
@@ -705,7 +733,6 @@ chatRoutes.post("/api/chat/threads/:threadId/messages", async (c) => {
       "content-type": "text/event-stream; charset=utf-8",
       "cache-control": "no-cache, no-store",
       connection: "keep-alive",
-      ...(modalOperationId ? { "x-operation-id": modalOperationId } : {}),
     },
   });
 });

@@ -58,6 +58,42 @@ class WorkflowAnalysisTests(unittest.TestCase):
         )
         self.assertTrue(result["runnable"])
 
+    def test_uses_node_specific_model_categories_and_ignores_internal_weights(self):
+        workflow = {
+            "1": {
+                "class_type": "CLIPVisionLoader",
+                "inputs": {"clip_name": "clip_vision_h.safetensors"},
+            },
+            "2": {
+                "class_type": "UpscaleModelLoader",
+                "inputs": {"model_name": "4x_foolhardy_Remacri.pth"},
+            },
+            "3": {
+                "class_type": "RIFE VFI",
+                "inputs": {"ckpt_name": "rife49.pth"},
+            },
+        }
+        node_info = {
+            class_type: {"input": {"required": {}}, "output": [], "output_node": False}
+            for class_type in ("CLIPVisionLoader", "UpscaleModelLoader", "RIFE VFI")
+        }
+
+        result = analyze_workflow(
+            workflow,
+            installed_nodes=set(node_info),
+            model_exists=lambda _category, _filename: False,
+            node_info=node_info,
+        )
+
+        self.assertEqual(
+            [(item["category"], item["filename"]) for item in result["models"]],
+            [
+                ("clip_vision", "clip_vision_h.safetensors"),
+                ("upscale_models", "4x_foolhardy_Remacri.pth"),
+            ],
+        )
+        self.assertNotIn("rife49.pth", str(result["models"]))
+
     def test_exposes_supported_camera_controls_without_exposing_internal_parameters(self):
         workflow = {
             "217": {

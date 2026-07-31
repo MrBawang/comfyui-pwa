@@ -60,7 +60,7 @@ These counters cover only operations routed through this Worker. Confirm before 
 
 Every Modal-triggering action first creates a five-minute, single-use cost approval. The approval is bound to the action, workflow or resource, file size, and batch count. Ambiguous submissions are marked for manual review and never retried automatically. See [docs/DEPLOYMENT_CHECKLIST.md](docs/DEPLOYMENT_CHECKLIST.md) for every manually entered value and the safe rollout order.
 
-## Modal Qwen3.6 (Stage 2, Deferred)
+## Modal Qwen3.6
 
 The LLM uses a dedicated Volume and only receives its own API token. It does not receive ComfyUI, R2, or Cloudflare credentials.
 
@@ -77,6 +77,13 @@ modal secret create lorachef-qwen36-config \
 uv run --python 3.11 --with-requirements requirements-modal.txt modal run modal_app/llm_app.py --quant Q6_K_P
 uv run --python 3.11 --with-requirements requirements-modal.txt modal deploy modal_app/llm_app.py
 ```
+
+The deployment exposes a lightweight CPU control plane at
+`https://<workspace>--lorachef-qwen36-api.modal.run`. Set this exact URL as the
+Worker Secret `MODAL_LLM_URL`; do not use the legacy `QwenServer.serve` URL.
+Chat requests are persisted in D1, serialized with ComfyUI by the global GPU
+queue, and polled through this control plane, so browser or public SSE
+disconnects do not cancel a cold start or duplicate generation.
 
 Only explicitly installed, checksum-verified files are eligible. Startup tries the active quant and then lower variants, rejects peak startup memory over 44 GiB, uses a 64K context with a 60K input budget, one concurrent request, and no vision projector. Run the billable 20-prompt gate only when ready:
 

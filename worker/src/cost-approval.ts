@@ -3,7 +3,7 @@ import type { Context } from "hono";
 
 import { COST_ACTIONS, type CostAction, type CostDescriptor, type CostQuote } from "../../shared/costs";
 import type { UserContext } from "./env";
-import { id, jsonError, modalBase, now, owner, wisartBase } from "./utils";
+import { id, jsonError, modalBase, modalLlmBase, now, owner, wisartBase } from "./utils";
 
 const QUOTE_LIFETIME_MS = 15 * 60 * 1_000;
 const APPROVAL_LIFETIME_MS = 5 * 60 * 1_000;
@@ -150,6 +150,11 @@ function providerConfigured(c: Context<UserContext>, action: CostAction) {
   if (spec.provider === "llm") {
     if (!c.env.MODAL_LLM_URL || !c.env.MODAL_LLM_TOKEN) {
       throw new CostApprovalError("Modal Qwen 尚未部署，当前阶段不会启动模型下载或 GPU", 503);
+    }
+    try {
+      modalLlmBase(c.env);
+    } catch (error) {
+      throw new CostApprovalError(error instanceof Error ? error.message : "Modal Qwen Workspace 校验失败", 503);
     }
     return;
   }

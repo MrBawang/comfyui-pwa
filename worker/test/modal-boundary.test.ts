@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { Env } from "../src/env";
-import { modalBase, modalEndpointStatus, modalHeaders, safeResponseMessage } from "../src/utils";
+import { modalBase, modalEndpointStatus, modalHeaders, modalLlmBase, safeResponseMessage } from "../src/utils";
 
 describe("Modal proxy boundary", () => {
   it("forwards only bounded content metadata and replaces caller credentials", () => {
@@ -34,6 +34,23 @@ describe("Modal proxy boundary", () => {
     expect(modalBase(valid)).toBe("https://luminaflow-studio--comfy-desk-api.modal.run");
     expect(modalEndpointStatus(mismatched).valid).toBe(false);
     expect(() => modalBase(mismatched)).toThrow("不属于已锁定的 luminaflow-studio Workspace");
+  });
+
+  it("accepts only the CPU Qwen control plane in the locked workspace", () => {
+    const valid = {
+      MODAL_WORKSPACE: "luminaflow-studio",
+      MODAL_LLM_URL: "https://luminaflow-studio--lorachef-qwen36-api.modal.run/",
+    } as Env;
+
+    expect(modalLlmBase(valid)).toBe("https://luminaflow-studio--lorachef-qwen36-api.modal.run");
+    expect(() => modalLlmBase({
+      ...valid,
+      MODAL_LLM_URL: "https://luminaflow-studio--lorachef-qwen36-qwenserver-serve.modal.run",
+    })).toThrow("lorachef-qwen36 API 端点");
+    expect(() => modalLlmBase({
+      ...valid,
+      MODAL_LLM_URL: "https://mrbawang--lorachef-qwen36-api.modal.run",
+    })).toThrow("lorachef-qwen36 API 端点");
   });
 
   it("caps a remote error body before turning it into a message", async () => {

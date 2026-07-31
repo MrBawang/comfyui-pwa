@@ -37,6 +37,26 @@ export interface ChatMessage {
   createdAt: number;
 }
 
+export type ChatOperationStatus =
+  | "queued"
+  | "submitting"
+  | "warming"
+  | "generating"
+  | "completed"
+  | "failed"
+  | "needs-human"
+  | "cancelled";
+
+export interface ChatOperation {
+  id: string;
+  threadId: string;
+  status: ChatOperationStatus;
+  message?: string;
+  assistantMessage?: ChatMessage;
+  createdAt: number;
+  updatedAt: number;
+}
+
 export interface RunSummary {
   id: string;
   kind: "workflow" | "character" | "image";

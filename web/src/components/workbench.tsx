@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { Check as CheckIcon, Download as DownloadIcon, RefreshCw, Upload as UploadIcon } from "lucide-react";
+import { Check as CheckIcon, Download as DownloadIcon, Link2, RefreshCw, Upload as UploadIcon } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { costTargets } from "@shared/costs";
@@ -8,6 +8,8 @@ import { costHeaders, useCostApproval } from "@/lib/cost-approval";
 import type {
   MissingNodePackage,
   MissingPythonRuntimePackage,
+  ModelAsset,
+  ModelBinding,
   ResourceJobResponse,
   SuggestedNodePackage,
   StoredWorkflow,
@@ -32,6 +34,7 @@ interface PendingResourceJob {
   key: string;
   workflowId?: string;
   workflowName?: string;
+  modelBindings?: ModelBinding[];
 }
 
 function wait(milliseconds: number, signal?: AbortSignal) {
@@ -79,11 +82,37 @@ function WorkflowDrop({ file, busy, busyLabel, onFile }: { file?: File; busy: bo
   );
 }
 
-function ModelRow({ model, installing, disabled, onInstall }: { model: WorkflowModel; installing: boolean; disabled: boolean; onInstall: (repoId: string, repoFile: string, revision: string) => Promise<void> }) {
+type ModelSourceMode = "existing" | "huggingface" | "url";
+
+function formatModelBytes(bytes: number) {
+  if (bytes >= 1024 ** 3) return `${(bytes / 1024 ** 3).toFixed(1)} GB`;
+  if (bytes >= 1024 ** 2) return `${(bytes / 1024 ** 2).toFixed(0)} MB`;
+  return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+}
+
+function ModelRow({ model, assets, installing, disabled, onBind, onInstallHuggingFace, onInstallUrl }: {
+  model: WorkflowModel;
+  assets: ModelAsset[];
+  installing: boolean;
+  disabled: boolean;
+  onBind: (actualFilename: string) => Promise<void>;
+  onInstallHuggingFace: (repoId: string, repoFile: string, revision: string) => Promise<void>;
+  onInstallUrl: (sourceUrl: string, sha256: string) => Promise<void>;
+}) {
   const [repoId, setRepoId] = useState(model.source?.repoId ?? "");
   const [repoFile, setRepoFile] = useState(model.source?.repoFile ?? model.filename);
   const [revision, setRevision] = useState(model.source?.revision ?? "main");
+  const [sourceUrl, setSourceUrl] = useState("");
+  const [sha256, setSha256] = useState("");
+  const available = assets.filter((item) => item.category === model.category);
+  const firstAvailableFilename = available[0]?.filename;
+  const [actualFilename, setActualFilename] = useState(available[0]?.filename ?? "");
+  const [sourceMode, setSourceMode] = useState<ModelSourceMode>(available.length ? "existing" : "huggingface");
   const missing = model.status === "missing";
+
+  useEffect(() => {
+    if (!actualFilename && firstAvailableFilename) setActualFilename(firstAvailableFilename);
+  }, [actualFilename, firstAvailableFilename]);
 
   return (
     <div className={`resource-row ${missing ? "resource-row--missing" : ""}`}>
@@ -96,12 +125,41 @@ function ModelRow({ model, installing, disabled, onInstall }: { model: WorkflowM
         </span>
       </div>
       {missing && (
-        <form className="install-form" onSubmit={(event) => { event.preventDefault(); void onInstall(repoId, repoFile, revision); }}>
-          <label>Hugging Face 仓库<input value={repoId} onChange={(event) => setRepoId(event.target.value)} placeholder="owner/repository" required /></label>
-          <label>仓库内文件<input value={repoFile} onChange={(event) => setRepoFile(event.target.value)} placeholder="model.safetensors" required /></label>
-          <label>版本或提交<input value={revision} onChange={(event) => setRevision(event.target.value)} placeholder="main 或 commit SHA" required /></label>
-          <button type="submit" disabled={disabled}>{installing ? <span className="mini-spinner" /> : <DownloadIcon size={16} />}{model.source ? "按工作流来源下载" : "云端下载"}</button>
-        </form>
+        <div className="model-source-panel">
+          <div className="segmented model-source-tabs" aria-label="模型来源">
+            <button type="button" aria-pressed={sourceMode === "existing"} onClick={() => setSourceMode("existing")}>云端已有</button>
+            <button type="button" aria-pressed={sourceMode === "huggingface"} onClick={() => setSourceMode("huggingface")}>Hugging Face</button>
+            <button type="button" aria-pressed={sourceMode === "url"} onClick={() => setSourceMode("url")}>下载链接</button>
+          </div>
+          {sourceMode === "existing" && (
+            <form className="install-form install-form--model-existing" onSubmit={(event) => { event.preventDefault(); void onBind(actualFilename); }}>
+              <label>同目录中的模型
+                <select value={actualFilename} onChange={(event) => setActualFilename(event.target.value)} required>
+                  <option value="" disabled>{available.length ? "选择实际文件" : "此目录暂无可用模型"}</option>
+                  {available.map((item) => <option key={item.filename} value={item.filename}>{item.filename} · {formatModelBytes(item.bytes)}</option>)}
+                </select>
+              </label>
+              <button type="submit" disabled={disabled || !actualFilename}>{installing ? <span className="mini-spinner" /> : <Link2 size={16} />}绑定并复查</button>
+              <small>仅修改这个工作流版本中的模型路径，不复制文件，也不会启动 GPU。</small>
+            </form>
+          )}
+          {sourceMode === "huggingface" && (
+            <form className="install-form" onSubmit={(event) => { event.preventDefault(); void onInstallHuggingFace(repoId, repoFile, revision); }}>
+              <label>Hugging Face 仓库<input value={repoId} onChange={(event) => setRepoId(event.target.value)} placeholder="owner/repository" required /></label>
+              <label>仓库内文件<input value={repoFile} onChange={(event) => setRepoFile(event.target.value)} placeholder="model.safetensors" required /></label>
+              <label>版本或提交<input value={revision} onChange={(event) => setRevision(event.target.value)} placeholder="main 或 commit SHA" required /></label>
+              <button type="submit" disabled={disabled}>{installing ? <span className="mini-spinner" /> : <DownloadIcon size={16} />}{model.source ? "按工作流来源下载" : "云端下载"}</button>
+            </form>
+          )}
+          {sourceMode === "url" && (
+            <form className="install-form install-form--model-url" onSubmit={(event) => { event.preventDefault(); void onInstallUrl(sourceUrl, sha256); }}>
+              <label>HTTPS 模型地址<input type="url" value={sourceUrl} onChange={(event) => setSourceUrl(event.target.value)} placeholder="https://civitai.com/api/download/models/..." required /></label>
+              <label>SHA-256（可选）<input value={sha256} onChange={(event) => setSha256(event.target.value)} placeholder="64 位十六进制校验值" pattern="[A-Fa-f0-9]{64}" /></label>
+              <button type="submit" disabled={disabled}>{installing ? <span className="mini-spinner" /> : <DownloadIcon size={16} />}从链接下载</button>
+              <small>支持 Hugging Face、Civitai、ModelScope 和 GitHub；地址不能包含 Token 或 API Key。</small>
+            </form>
+          )}
+        </div>
       )}
     </div>
   );
@@ -197,6 +255,9 @@ export function Workbench({ isMock }: { isMock: boolean }) {
   const [workflowFile, setWorkflowFile] = useState<File>();
   const [workflowName, setWorkflowName] = useState("");
   const [analysis, setAnalysis] = useState<WorkflowAnalysis>();
+  const [modelAssets, setModelAssets] = useState<ModelAsset[]>([]);
+  const [modelBindings, setModelBindings] = useState<ModelBinding[]>([]);
+  const [modelCatalogStatus, setModelCatalogStatus] = useState<"idle" | "loading" | "ready" | "failed">("idle");
   const [storedWorkflows, setStoredWorkflows] = useState<StoredWorkflow[]>([]);
   const [loadingLibrary, setLoadingLibrary] = useState(true);
   const [syncingLibrary, setSyncingLibrary] = useState(false);
@@ -220,6 +281,27 @@ export function Workbench({ isMock }: { isMock: boolean }) {
   const missingRuntimePackages = analysis?.missingRuntimePackages ?? [];
   const parameterInputs = analysis?.parameterInputs ?? [];
   const compatibilityAdjustments = analysis?.compatibilityAdjustments ?? [];
+
+  useEffect(() => {
+    if (!analysis?.models.some((item) => item.status === "missing") || modelCatalogStatus !== "idle") return;
+    const controller = new AbortController();
+    setModelCatalogStatus("loading");
+    void fetch("/api/resources/models", { cache: "no-store", signal: controller.signal })
+      .then(async (response) => {
+        const body = await response.json() as { models?: ModelAsset[]; message?: string; detail?: string };
+        if (!response.ok) throw new Error(body.detail ?? body.message ?? "云端模型目录读取失败");
+        setModelAssets(body.models ?? []);
+        setModelCatalogStatus("ready");
+      })
+      .catch((catalogError) => {
+        if (!isAbortError(catalogError)) setModelCatalogStatus("failed");
+      });
+    return () => controller.abort();
+  }, [analysis]);
+
+  function appendModelBindings(form: FormData, bindings: ModelBinding[]) {
+    if (bindings.length) form.set("modelBindings", JSON.stringify(bindings));
+  }
 
   async function refreshStoredWorkflows() {
     setLoadingLibrary(true);
@@ -259,7 +341,11 @@ export function Workbench({ isMock }: { isMock: boolean }) {
     }
   }
 
-  async function recheckStoredWorkflow(workflowId: string, workflowName?: string) {
+  async function recheckStoredWorkflow(
+    workflowId: string,
+    workflowName?: string,
+    bindings: ModelBinding[] = [],
+  ) {
     const requestId = analysisRequests.current.begin();
     setRecheckingId(workflowId);
     setError(undefined);
@@ -275,7 +361,8 @@ export function Workbench({ isMock }: { isMock: boolean }) {
       if (!approval) return false;
       const response = await fetch(`/api/workflows/${encodeURIComponent(workflowId)}/recheck`, {
         method: "POST",
-        headers: costHeaders(approval),
+        headers: costHeaders(approval, { "content-type": "application/json" }),
+        body: JSON.stringify({ modelBindings: bindings }),
       });
       const body = await response.json() as StoredWorkflow & {
         detail?: string;
@@ -294,6 +381,7 @@ export function Workbench({ isMock }: { isMock: boolean }) {
         return false;
       }
       if (!response.ok) throw new Error(body.detail ?? body.message ?? "工作流复查失败");
+      setModelBindings([]);
       setReviewingWorkflow(undefined);
       setAnalysis(undefined);
       setResourceNotice(`“${body.name ?? workflowName ?? "工作流"}”已通过复查并更新版本。`);
@@ -408,7 +496,11 @@ export function Workbench({ isMock }: { isMock: boolean }) {
       .then(async (completed) => {
         if (completed.assetVersion) setAssetVersion(completed.assetVersion);
         if (pending.workflowId) {
-          await recheckStoredWorkflow(pending.workflowId, pending.workflowName);
+          await recheckStoredWorkflow(
+            pending.workflowId,
+            pending.workflowName,
+            pending.modelBindings ?? [],
+          );
         } else {
           setResourceNotice("资源安装已完成，请重新选择工作流文件以刷新检查结果。");
         }
@@ -429,7 +521,7 @@ export function Workbench({ isMock }: { isMock: boolean }) {
 
   useEffect(() => () => resourcePollAbort.current?.abort(), []);
 
-  async function analyze(file: File) {
+  async function analyze(file: File, bindings: ModelBinding[] = modelBindings) {
     const requestId = analysisRequests.current.begin();
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), ANALYSIS_TIMEOUT_MS);
@@ -439,9 +531,10 @@ export function Workbench({ isMock }: { isMock: boolean }) {
     try {
       const target = costTargets.workflowFile(file.name);
       const approval = await confirmCost({ action: "workflow-analyze", target, fileBytes: file.size, batchCount: 1 });
-      if (!approval) return;
+      if (!approval) return false;
       const form = new FormData();
       form.set("workflow", file);
+      appendModelBindings(form, bindings);
       const response = await fetch("/api/workflows/analyze", {
         method: "POST",
         headers: costHeaders(approval, {
@@ -453,13 +546,14 @@ export function Workbench({ isMock }: { isMock: boolean }) {
       });
       const body = await response.json();
       if (!response.ok) throw new Error(body.detail ?? body.message ?? "工作流分析失败");
-      if (!analysisRequests.current.isCurrent(requestId)) return;
+      if (!analysisRequests.current.isCurrent(requestId)) return false;
       const nextAnalysis = body as WorkflowAnalysis;
       setAnalysis(nextAnalysis);
       setCanRollbackRuntime(Boolean(nextAnalysis.canRollbackRuntime));
       setAssetVersion(nextAnalysis.assetVersion ?? "base");
+      return true;
     } catch (analyzeError) {
-      if (!analysisRequests.current.isCurrent(requestId)) return;
+      if (!analysisRequests.current.isCurrent(requestId)) return false;
       setAnalysis(undefined);
       setError(
         controller.signal.aborted
@@ -468,6 +562,7 @@ export function Workbench({ isMock }: { isMock: boolean }) {
             ? analyzeError.message
             : "工作流分析失败",
       );
+      return false;
     } finally {
       clearTimeout(timeout);
       if (analysisRequests.current.isCurrent(requestId)) setAnalyzing(false);
@@ -487,10 +582,11 @@ export function Workbench({ isMock }: { isMock: boolean }) {
     }
     setReviewingWorkflow(undefined);
     setRecheckingId(undefined);
+    setModelBindings([]);
     setResourceNotice(undefined);
     setWorkflowFile(file);
     setWorkflowName(file.name.replace(/\.(json|png|webp)$/i, ""));
-    await analyze(file);
+    await analyze(file, []);
   }
 
   async function saveWorkflow() {
@@ -505,6 +601,7 @@ export function Workbench({ isMock }: { isMock: boolean }) {
       const form = new FormData();
       form.set("workflow", workflowFile);
       form.set("name", workflowName);
+      appendModelBindings(form, modelBindings);
       const response = await fetch("/api/workflows", {
         method: "POST",
         headers: costHeaders(approval, {
@@ -535,6 +632,7 @@ export function Workbench({ isMock }: { isMock: boolean }) {
       if (!approval) return;
       const form = new FormData();
       form.set("workflow", workflowFile);
+      appendModelBindings(form, modelBindings);
       const response = await fetch("/api/workflows/convert", {
         method: "POST",
         headers: costHeaders(approval, {
@@ -564,7 +662,31 @@ export function Workbench({ isMock }: { isMock: boolean }) {
     }
   }
 
-  async function installModel(model: WorkflowModel, repoId: string, repoFile: string, revision: string) {
+  async function bindModel(model: WorkflowModel, actualFilename: string) {
+    const nextBindings = modelBindings
+      .filter((item) => item.category !== model.category || item.expectedFilename !== model.filename)
+      .concat({
+        category: model.category,
+        expectedFilename: model.filename,
+        actualFilename,
+      });
+    setModelBindings(nextBindings);
+    setError(undefined);
+    setResourceNotice(`正在把“${model.filename}”绑定到云端已有模型并重新检查…`);
+    if (reviewingWorkflow) {
+      await recheckStoredWorkflow(reviewingWorkflow.id, reviewingWorkflow.name, nextBindings);
+    } else if (workflowFile) {
+      if (await analyze(workflowFile, nextBindings)) {
+        setResourceNotice("模型路径已绑定；保存工作流时会写入新的可运行版本。");
+      }
+    }
+  }
+
+  async function installModel(
+    model: WorkflowModel,
+    source: { sourceKind: "huggingface"; repoId: string; repoFile: string; revision: string }
+      | { sourceKind: "url"; sourceUrl: string; sha256: string },
+  ) {
     const key = `model:${model.category}:${model.filename}`;
     const reviewTarget = reviewingWorkflow;
     setInstallingKey(key);
@@ -572,14 +694,16 @@ export function Workbench({ isMock }: { isMock: boolean }) {
     setResourceNotice("模型下载已提交，离开页面后仍会在云端继续。");
     let controller: AbortController | undefined;
     try {
-      const target = costTargets.model(repoId, repoFile, revision, model.category, model.filename);
+      const target = source.sourceKind === "url"
+        ? costTargets.modelUrl(source.sourceUrl, model.category, model.filename, source.sha256)
+        : costTargets.model(source.repoId, source.repoFile, source.revision, model.category, model.filename);
       const approval = await confirmCost({ action: "model-download", target, fileBytes: 0, batchCount: 1 });
       if (!approval) return;
       setResourceNotice("模型下载已提交，离开页面后仍会在云端继续。");
       const response = await fetch("/api/resources/models", {
         method: "POST",
         headers: costHeaders(approval, { "content-type": "application/json" }),
-        body: JSON.stringify({ repoId, repoFile, revision, category: model.category, filename: model.filename }),
+        body: JSON.stringify({ ...source, category: model.category, filename: model.filename }),
       });
       const body = await response.json() as ResourceJobResponse & { detail?: string };
       if (!response.ok) throw new Error(body.detail ?? body.message ?? "模型安装失败");
@@ -590,15 +714,17 @@ export function Workbench({ isMock }: { isMock: boolean }) {
         key,
         workflowId: reviewTarget?.id,
         workflowName: reviewTarget?.name,
+        modelBindings,
       });
       const completed = await waitForResourceJob(body.jobId, controller.signal);
       if (completed.assetVersion) setAssetVersion(completed.assetVersion);
+      setModelCatalogStatus("idle");
       setInstallingKey(undefined);
       setResourceNotice("模型下载完成，正在刷新工作流检查…");
       if (reviewTarget) {
-        await recheckStoredWorkflow(reviewTarget.id, reviewTarget.name);
+        await recheckStoredWorkflow(reviewTarget.id, reviewTarget.name, modelBindings);
       } else {
-        if (workflowFile) await analyze(workflowFile);
+        if (workflowFile) await analyze(workflowFile, modelBindings);
         setResourceNotice("模型安装完成，工作流检查结果已刷新。");
       }
     } catch (installError) {
@@ -650,11 +776,12 @@ export function Workbench({ isMock }: { isMock: boolean }) {
         key,
         workflowId: reviewTarget?.id,
         workflowName: reviewTarget?.name,
+        modelBindings,
       });
       const completed = await waitForResourceJob(body.jobId, controller.signal);
       if (completed.assetVersion) setAssetVersion(completed.assetVersion);
       if (reviewTarget) {
-        await recheckStoredWorkflow(reviewTarget.id, reviewTarget.name);
+        await recheckStoredWorkflow(reviewTarget.id, reviewTarget.name, modelBindings);
       } else {
         if (workflowFile) await analyze(workflowFile);
         setResourceNotice("节点包安装完成，工作流检查结果已刷新。");
@@ -696,11 +823,12 @@ export function Workbench({ isMock }: { isMock: boolean }) {
         key,
         workflowId: reviewTarget?.id,
         workflowName: reviewTarget?.name,
+        modelBindings,
       });
       const completed = await waitForResourceJob(body.jobId, controller.signal);
       if (completed.assetVersion) setAssetVersion(completed.assetVersion);
       if (reviewTarget) {
-        await recheckStoredWorkflow(reviewTarget.id, reviewTarget.name);
+        await recheckStoredWorkflow(reviewTarget.id, reviewTarget.name, modelBindings);
       } else {
         if (workflowFile) await analyze(workflowFile);
         setResourceNotice("运行扩展安装完成，工作流检查结果已刷新。");
@@ -741,11 +869,12 @@ export function Workbench({ isMock }: { isMock: boolean }) {
         key,
         workflowId: reviewTarget?.id,
         workflowName: reviewTarget?.name,
+        modelBindings,
       });
       const completed = await waitForResourceJob(body.jobId, controller.signal);
       if (completed.assetVersion) setAssetVersion(completed.assetVersion);
       if (reviewTarget) {
-        await recheckStoredWorkflow(reviewTarget.id, reviewTarget.name);
+        await recheckStoredWorkflow(reviewTarget.id, reviewTarget.name, modelBindings);
       } else {
         if (workflowFile) await analyze(workflowFile);
         setResourceNotice("已恢复上一版节点环境，工作流检查结果已刷新。");
@@ -846,8 +975,33 @@ export function Workbench({ isMock }: { isMock: boolean }) {
               {analysis.models.length > 0 && (
                 <section className="workflow-section resource-section">
                   <div className="workflow-section__heading"><h2>模型</h2><span>{analysis.models.filter((item) => item.status === "missing").length} 个缺失</span></div>
+                  {analysis.models.some((item) => item.status === "missing") && (
+                    <p className="model-catalog-note">
+                      {modelCatalogStatus === "loading" && "正在读取 Modal 模型目录…"}
+                      {modelCatalogStatus === "ready" && `已读取 ${modelAssets.length} 个云端模型；目录读取和路径绑定不会启动 GPU。`}
+                      {modelCatalogStatus === "failed" && "云端模型目录暂时无法读取，仍可使用 Hugging Face 或受信下载链接。"}
+                    </p>
+                  )}
                   {analysis.models.map((model) => (
-                    <ModelRow key={`${model.category}:${model.filename}`} model={model} installing={installingKey === `model:${model.category}:${model.filename}`} disabled={Boolean(installingKey)} onInstall={(repoId, repoFile, revision) => installModel(model, repoId, repoFile, revision)} />
+                    <ModelRow
+                      key={`${model.category}:${model.filename}`}
+                      model={model}
+                      assets={modelAssets}
+                      installing={installingKey === `model:${model.category}:${model.filename}`}
+                      disabled={Boolean(installingKey) || analyzing || Boolean(recheckingId)}
+                      onBind={(actualFilename) => bindModel(model, actualFilename)}
+                      onInstallHuggingFace={(repoId, repoFile, revision) => installModel(model, {
+                        sourceKind: "huggingface",
+                        repoId,
+                        repoFile,
+                        revision,
+                      })}
+                      onInstallUrl={(sourceUrl, sha256) => installModel(model, {
+                        sourceKind: "url",
+                        sourceUrl,
+                        sha256,
+                      })}
+                    />
                   ))}
                 </section>
               )}
@@ -949,7 +1103,10 @@ export function Workbench({ isMock }: { isMock: boolean }) {
                     <button
                       type="button"
                       disabled={Boolean(recheckingId) || Boolean(installingKey) || analyzing}
-                      onClick={() => void recheckStoredWorkflow(stored.id, stored.name)}
+                      onClick={() => {
+                        setModelBindings([]);
+                        void recheckStoredWorkflow(stored.id, stored.name, []);
+                      }}
                     >
                       {recheckingId === stored.id && <span className="mini-spinner" />}
                       {recheckingId === stored.id ? "复查中" : "复查"}

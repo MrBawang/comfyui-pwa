@@ -23,6 +23,11 @@ MODEL_INPUTS = {
     "gligen_name": "gligen",
     "upscale_model": "upscale_models",
 }
+MODEL_INPUT_OVERRIDES = {
+    ("CLIPVisionLoader", "clip_name"): "clip_vision",
+    ("RIFE VFI", "ckpt_name"): None,
+    ("UpscaleModelLoader", "model_name"): "upscale_models",
+}
 
 IMAGE_NODE_TYPES = {"LoadImage", "LoadImageMask"}
 OUTPUT_NODE_TYPES = {"SaveImage"}
@@ -208,6 +213,13 @@ def _is_workflow_link(value: Any) -> bool:
     )
 
 
+def model_input_category(class_type: str, input_name: str) -> str | None:
+    override = MODEL_INPUT_OVERRIDES.get((class_type, input_name), ...)
+    if override is not ...:
+        return override
+    return MODEL_INPUTS.get(input_name)
+
+
 def _unsupported_input_values(
     workflow: Mapping[str, Mapping[str, Any]], node_info: Mapping[str, Any]
 ) -> list[dict[str, Any]]:
@@ -219,7 +231,7 @@ def _unsupported_input_values(
             if _is_workflow_link(value):
                 continue
             input_definition = declared_inputs.get(input_name)
-            if input_name in MODEL_INPUTS or _upload_options(input_definition) is not None:
+            if model_input_category(class_type, input_name) is not None or _upload_options(input_definition) is not None:
                 continue
             options = _enum_options(input_definition)
             if options is None or value in options:
@@ -495,8 +507,10 @@ def analyze_workflow(
         ) or (node_info is None and class_type in OUTPUT_NODE_TYPES):
             output_nodes.append(node_id)
 
-        for input_name, category in MODEL_INPUTS.items():
-            filename = inputs.get(input_name)
+        for input_name, filename in inputs.items():
+            category = model_input_category(class_type, input_name)
+            if category is None:
+                continue
             if not isinstance(filename, str):
                 continue
             if not safe_model_reference(filename):

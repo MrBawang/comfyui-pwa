@@ -1,7 +1,5 @@
 """Independent Modal deployment for the Qwen3.6 GGUF chat service."""
 
-from __future__ import annotations
-
 import hashlib
 import json
 import os
@@ -53,8 +51,17 @@ server_image = (
     )
     .add_local_python_source("modal_app")
 )
+api_image = (
+    modal.Image.debian_slim(python_version="3.11")
+    .uv_pip_install(
+        "fastapi==0.115.4",
+        "httpx==0.28.1",
+    )
+    .add_local_python_source("modal_app")
+)
 
 app = modal.App(APP_NAME)
+job_state = modal.Dict.from_name("lorachef-qwen36-job-state", create_if_missing=True)
 
 
 def _sha256(path: Path) -> str:
@@ -178,7 +185,7 @@ def _used_gpu_mib() -> int:
     min_containers=0,
     buffer_containers=0,
     max_containers=1,
-    scaledown_window=60,
+    scaledown_window=300,
     startup_timeout=1_800,
     timeout=900,
 )
@@ -243,6 +250,34 @@ class QwenServer:
         if handle:
             handle.close()
 
+    @modal.method()
+    def generate(self, operation_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+        """Generate one durable, non-streaming reply after the GPU container is ready."""
+        import httpx
+
+        try:
+            job_state.put(
+                f"operation-stage:{operation_id}",
+                {"status": "generating", "message": "模型已加载，正在生成回复"},
+            )
+        except Exception:
+            pass
+        request_payload = dict(payload)
+        request_payload["stream"] = False
+        response = httpx.post(
+            "http://127.0.0.1:8001/v1/chat/completions",
+            json=request_payload,
+            timeout=600,
+        )
+        response.raise_for_status()
+        body = response.json()
+        choices = body.get("choices") if isinstance(body, dict) else None
+        message = choices[0].get("message") if isinstance(choices, list) and choices else None
+        content = message.get("content") if isinstance(message, dict) else None
+        if not isinstance(content, str) or not content.strip():
+            raise RuntimeError("模型返回了空内容")
+        return {"content": content, "model": MODEL_ID}
+
     @modal.web_server(8000, startup_timeout=1_800)
     def serve(self) -> None:
         subprocess.Popen(
@@ -254,6 +289,139 @@ class QwenServer:
                 "--no-access-log",
             ]
         )
+
+
+@app.function(
+    image=api_image,
+    secrets=[llm_config],
+    min_containers=0,
+    buffer_containers=0,
+    max_containers=1,
+    timeout=660,
+)
+@modal.concurrent(max_inputs=1)
+@modal.asgi_app()
+def api():
+    """Lightweight control plane that survives Qwen GPU cold starts."""
+    import hmac
+
+    from fastapi import FastAPI, HTTPException, Request
+    from fastapi.responses import JSONResponse
+
+    from modal_app.llm_proxy import _validated_payload
+
+    web = FastAPI(title="Qwen3.6 Modal Jobs API", docs_url=None, redoc_url=None)
+
+    def authorize(request: Request) -> None:
+        expected = os.environ.get("LLM_API_TOKEN", "")
+        supplied = request.headers.get("authorization", "").removeprefix("Bearer ")
+        if not expected:
+            raise HTTPException(status_code=503, detail="LLM authentication is not configured")
+        if not hmac.compare_digest(supplied, expected):
+            raise HTTPException(status_code=401, detail="invalid bearer token")
+
+    @web.get("/health")
+    async def health(request: Request) -> dict[str, str]:
+        authorize(request)
+        return {"status": "ready", "app": APP_NAME}
+
+    @web.post("/jobs", status_code=202)
+    async def create_job(request: Request):
+        authorize(request)
+        raw_length = request.headers.get("content-length")
+        if raw_length and (not raw_length.isdigit() or int(raw_length) > 512 * 1024):
+            raise HTTPException(status_code=413, detail="request body is too large")
+        raw = await request.body()
+        if len(raw) > 512 * 1024:
+            raise HTTPException(status_code=413, detail="request body is too large")
+        try:
+            body = json.loads(raw)
+        except (json.JSONDecodeError, TypeError) as error:
+            raise HTTPException(status_code=400, detail="invalid JSON request") from error
+        operation_id = body.get("operationId") if isinstance(body, dict) else None
+        if (
+            not isinstance(operation_id, str)
+            or len(operation_id) != 32
+            or any(character not in "0123456789abcdef" for character in operation_id)
+        ):
+            raise HTTPException(status_code=400, detail="invalid operationId")
+        payload = _validated_payload(body.get("payload"))
+        payload["stream"] = False
+        existing_job_id = await job_state.get.aio(f"operation-job:{operation_id}", None)
+        if isinstance(existing_job_id, str):
+            metadata = await job_state.get.aio(f"job:{existing_job_id}", None)
+            return {
+                "jobId": existing_job_id,
+                "status": metadata.get("status", "warming") if isinstance(metadata, dict) else "warming",
+                "message": "Modal 已接收该任务，不会重复启动 GPU",
+            }
+        call = await QwenServer().generate.spawn.aio(operation_id, payload)
+        await job_state.put.aio(
+            f"job:{call.object_id}",
+            {
+                "operationId": operation_id,
+                "status": "warming",
+                "message": "正在启动 GPU 并加载模型",
+            },
+        )
+        await job_state.put.aio(f"operation-job:{operation_id}", call.object_id)
+        return {
+            "jobId": call.object_id,
+            "status": "warming",
+            "message": "Modal 已接收任务，正在启动 GPU",
+        }
+
+    @web.get("/jobs/{job_id}")
+    async def job_status(job_id: str, request: Request):
+        authorize(request)
+        metadata = await job_state.get.aio(f"job:{job_id}", None)
+        if not isinstance(metadata, dict):
+            raise HTTPException(status_code=404, detail="job not found")
+        call = modal.functions.FunctionCall.from_id(job_id)
+        try:
+            result = await call.get.aio(timeout=0)
+        except TimeoutError:
+            operation_id = metadata.get("operationId")
+            stage = (
+                await job_state.get.aio(f"operation-stage:{operation_id}", None)
+                if isinstance(operation_id, str)
+                else None
+            )
+            current = stage if isinstance(stage, dict) else metadata
+            return JSONResponse(
+                {
+                    "jobId": job_id,
+                    "status": current.get("status", "warming"),
+                    "message": current.get("message", "正在启动 GPU"),
+                },
+                status_code=202,
+            )
+        except Exception as error:
+            return {"jobId": job_id, "status": "failed", "message": str(error)}
+        if not isinstance(result, dict) or not isinstance(result.get("content"), str):
+            return {"jobId": job_id, "status": "failed", "message": "模型结果格式不正确"}
+        return {
+            "jobId": job_id,
+            "status": "succeeded",
+            "message": "回复生成完成",
+            "content": result["content"],
+        }
+
+    @web.delete("/jobs/{job_id}")
+    async def cancel_job(job_id: str, request: Request):
+        authorize(request)
+        metadata = await job_state.get.aio(f"job:{job_id}", None)
+        if not isinstance(metadata, dict):
+            raise HTTPException(status_code=404, detail="job not found")
+        call = modal.functions.FunctionCall.from_id(job_id)
+        try:
+            await call.hydrate.aio()
+            await call.cancel.aio()
+        except Exception as error:
+            raise HTTPException(status_code=422, detail=str(error)) from error
+        return {"jobId": job_id, "status": "cancelled", "message": "任务已取消"}
+
+    return web
 
 
 @app.local_entrypoint()

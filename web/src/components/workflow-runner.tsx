@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { ChevronLeft, ChevronRight, Download, FileOutput, Maximize2, X } from "lucide-react";
 
 import { costTargets } from "@shared/costs";
 import { AppHeader } from "@/components/app-header";
@@ -225,31 +226,115 @@ function validParameterValue(item: WorkflowParameterInput, value: string) {
     && (item.maximum === undefined || numeric <= item.maximum);
 }
 
+function formatOutputBytes(value: number) {
+  if (value < 1_024) return `${value} B`;
+  if (value < 1_024 ** 2) return `${(value / 1_024).toFixed(1)} KiB`;
+  return `${(value / 1_024 ** 2).toFixed(1)} MiB`;
+}
+
 function OutputGallery({ job, workflowName }: { job: JobResponse; workflowName?: string }) {
   const outputs = job.outputs?.length
     ? job.outputs
     : job.resultUrl
       ? [{ index: 0, filename: "result", mediaType: "image/*", bytes: 0, url: job.resultUrl }]
       : [];
-  if (outputs.length === 1 && outputs[0].mediaType.startsWith("image/")) {
-    return (
-      <div className="output-single">
-        <img src={outputs[0].url} alt={`${workflowName ?? "工作流"} 的生成结果`} />
-      </div>
-    );
+  const dialog = useRef<HTMLDialogElement>(null);
+  const previewTrigger = useRef<HTMLButtonElement>(null);
+  const [selectedIndex, setSelectedIndex] = useState(0);
+  const selected = outputs[selectedIndex] ?? outputs[0];
+  const canNavigate = outputs.length > 1;
+  const selectedPosition = Math.max(0, outputs.indexOf(selected));
+
+  useEffect(() => {
+    setSelectedIndex((current) => Math.min(current, Math.max(0, outputs.length - 1)));
+  }, [outputs.length]);
+
+  function selectOutput(nextIndex: number) {
+    setSelectedIndex((nextIndex + outputs.length) % outputs.length);
   }
+
+  function openPreview() {
+    if (!dialog.current?.open) dialog.current?.showModal();
+  }
+
+  function closePreview() {
+    dialog.current?.close();
+  }
+
+  function restorePreviewFocus() {
+    previewTrigger.current?.focus();
+  }
+
+  function handleNavigationKey(event: React.KeyboardEvent<HTMLElement>) {
+    if (!canNavigate) return;
+    if (event.key === "ArrowLeft") {
+      event.preventDefault();
+      selectOutput(selectedPosition - 1);
+    }
+    if (event.key === "ArrowRight") {
+      event.preventDefault();
+      selectOutput(selectedPosition + 1);
+    }
+  }
+
+  if (!selected) return null;
+  const isImage = selected.mediaType.startsWith("image/");
+  const isVideo = selected.mediaType.startsWith("video/");
+  const canPreview = isImage || isVideo;
+  const label = `${workflowName ?? "工作流"}的输出 ${selectedPosition + 1}`;
+  const statusNotice = job.status === "processing"
+    ? `已保存 ${outputs.length} 个结果，正在完成转存`
+    : job.status === "failed"
+      ? `已保存 ${outputs.length} 个结果；${readableRunError(job.message)}`
+      : undefined;
+
   return (
-    <div className="output-gallery" aria-label={`${outputs.length} 个工作流输出`}>
-      {outputs.map((output) => (
-        <figure key={`${output.index}:${output.filename}`}>
-          <div className="output-gallery__preview">
-            {output.mediaType.startsWith("image/")
-              ? <img src={output.url} alt={`输出 ${output.index + 1}：${output.filename}`} loading="lazy" />
-              : <span>{output.mediaType}</span>}
-          </div>
-          <figcaption><span title={output.filename}>{output.filename}</span><a href={output.url} download>下载</a></figcaption>
-        </figure>
-      ))}
+    <div className="output-browser" aria-label={`${outputs.length} 个工作流输出`} onKeyDown={handleNavigationKey}>
+      <div className="output-browser__main">
+        {canPreview ? (
+          <button ref={previewTrigger} type="button" className="output-browser__preview" onClick={openPreview} title="放大查看当前结果">
+            {isImage
+              ? <img src={selected.url} alt={label} />
+              : <video src={selected.url} aria-label={label} controls />}
+            <span className="output-browser__expand" aria-hidden="true"><Maximize2 size={18} /></span>
+          </button>
+        ) : (
+          <div className="output-browser__file"><FileOutput size={28} /><strong>{selected.filename}</strong><span>{selected.mediaType}</span></div>
+        )}
+        {canNavigate && (
+          <>
+            <button type="button" className="output-browser__step output-browser__step--previous" onClick={() => selectOutput(selectedPosition - 1)} aria-label="查看上一个结果" title="上一个结果"><ChevronLeft size={22} /></button>
+            <button type="button" className="output-browser__step output-browser__step--next" onClick={() => selectOutput(selectedPosition + 1)} aria-label="查看下一个结果" title="下一个结果"><ChevronRight size={22} /></button>
+          </>
+        )}
+        <div className="output-browser__meta"><span>{selectedPosition + 1} / {outputs.length}</span><strong title={selected.filename}>{selected.filename}</strong><small>{formatOutputBytes(selected.bytes)}</small></div>
+        <div className="output-browser__actions">
+          <a href={selected.url} target="_blank" rel="noreferrer" aria-label="在新标签页打开原图" title="打开原图"><Maximize2 size={17} /></a>
+          <a href={selected.url} download={selected.filename} aria-label="下载当前结果" title="下载"><Download size={17} /></a>
+        </div>
+      </div>
+      {statusNotice && <p className={`output-browser__notice output-browser__notice--${job.status}`} role={job.status === "failed" ? "alert" : "status"}>{statusNotice}</p>}
+      {canNavigate && (
+        <div className="output-browser__thumbnails" role="tablist" aria-label="选择生成结果">
+          {outputs.map((output, index) => {
+            const active = index === selectedPosition;
+            return (
+              <button key={`${output.index}:${output.filename}`} type="button" className={active ? "is-selected" : ""} onClick={() => setSelectedIndex(index)} aria-selected={active} role="tab" aria-label={`查看结果 ${index + 1}`}>
+                {output.mediaType.startsWith("image/")
+                  ? <img src={output.url} alt="" loading="lazy" />
+                  : <FileOutput size={18} aria-hidden="true" />}
+              </button>
+            );
+          })}
+        </div>
+      )}
+      <dialog ref={dialog} className="output-preview-dialog" onClose={restorePreviewFocus} onKeyDown={handleNavigationKey}>
+        <div className="output-preview-dialog__body">
+          <header><div><strong>{selected.filename}</strong><small>结果 {selectedPosition + 1} / {outputs.length} · {formatOutputBytes(selected.bytes)}</small></div><button type="button" onClick={closePreview} aria-label="关闭预览" title="关闭"><X size={19} /></button></header>
+          <div className="output-preview-dialog__media">{isImage ? <img src={selected.url} alt={label} /> : isVideo ? <video src={selected.url} aria-label={label} controls autoPlay /> : <FileOutput size={32} />}</div>
+          <footer>{canNavigate && <div><button type="button" onClick={() => selectOutput(selectedPosition - 1)} aria-label="查看上一个结果" title="上一个结果"><ChevronLeft size={18} /></button><button type="button" onClick={() => selectOutput(selectedPosition + 1)} aria-label="查看下一个结果" title="下一个结果"><ChevronRight size={18} /></button></div>}<a href={selected.url} download={selected.filename}><Download size={16} />下载</a></footer>
+        </div>
+      </dialog>
     </div>
   );
 }
@@ -566,12 +651,12 @@ export function WorkflowRunner({ isMock }: { isMock: boolean }) {
           <header><div><strong>{selected?.name ?? "等待选择工作流"}</strong>{selected && <span>{activeModeName} · {activeOutputNodes.length} 个输出节点</span>}</div>{job && <span role="status" className={`job-chip job-chip--${job.status}`}>{job.status === "succeeded" ? "已完成" : job.status === "failed" ? "失败" : job.status === "cancelled" ? "已取消" : "处理中"}</span>}</header>
           <div className="workflow-canvas">
             {!job && <div className="empty-stage"><span aria-hidden="true">▶</span><strong>{selected ? "准备运行" : "选择工作流后开始"}</strong><p>{selected ? "上传工作流需要的图像，生成结果会显示在这里。" : "运行页只显示已经通过云端检查的工作流版本。"}</p></div>}
-            {(job?.status === "uploading" || job?.status === "processing") && <div className="processing-preview" role="status"><span className="processing-orbit"><span /></span><strong>Modal 正在运行节点图</strong><span>{job.message}</span></div>}
-            {job?.status === "succeeded" && <OutputGallery job={job} workflowName={selected?.name ?? job.workflowName} />}
-            {job?.status === "failed" && <div className="inspection-stage"><span className="inspection-mark">!</span><strong>工作流运行失败</strong><p>{readableRunError(job.message)}</p></div>}
+            {(job?.status === "uploading" || (job?.status === "processing" && !job.outputs?.length)) && <div className="processing-preview" role="status"><span className="processing-orbit"><span /></span><strong>Modal 正在运行节点图</strong><span>{job.message}</span></div>}
+            {job && (job.outputs?.length || (job.status === "succeeded" && job.resultUrl)) ? <OutputGallery job={job} workflowName={selected?.name ?? job.workflowName} /> : null}
+            {job?.status === "failed" && !job.outputs?.length && <div className="inspection-stage"><span className="inspection-mark">!</span><strong>工作流运行失败</strong><p>{readableRunError(job.message)}</p></div>}
             {job?.status === "cancelled" && <div className="inspection-stage"><span className="inspection-mark">×</span><strong>云端任务已取消</strong><p>输入仍然保留，可以再次运行。</p></div>}
           </div>
-          <footer><span>ComfyUI on Modal</span>{job?.status === "succeeded" && job.resultUrl && <a href={job.resultUrl} download>下载首个结果</a>}</footer>
+          <footer><span>ComfyUI on Modal</span>{job?.resultUrl && <a href={job.resultUrl} download>下载首个结果</a>}</footer>
         </section>
       </main>
     </div>

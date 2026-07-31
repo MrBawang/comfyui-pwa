@@ -55,6 +55,23 @@ export function modalBase(env: Env) {
   return env.MODAL_API_URL.replace(/\/$/, "");
 }
 
+export function modalLlmBase(env: Pick<Env, "MODAL_WORKSPACE" | "MODAL_LLM_URL">) {
+  const workspace = String(env.MODAL_WORKSPACE ?? "").trim();
+  if (!workspace) throw new Error("尚未配置 MODAL_WORKSPACE");
+  if (!env.MODAL_LLM_URL) throw new Error("Modal Qwen3.6 尚未配置");
+  try {
+    const url = new URL(env.MODAL_LLM_URL);
+    const expectedHost = `${workspace}--lorachef-qwen36-api.modal.run`;
+    if (url.protocol !== "https:" || url.hostname !== expectedHost
+      || (url.pathname !== "/" && url.pathname !== "") || url.search || url.hash) {
+      throw new Error();
+    }
+    return url.origin;
+  } catch {
+    throw new Error(`Modal Qwen 地址必须是 ${workspace} Workspace 的 lorachef-qwen36 API 端点`);
+  }
+}
+
 export function modalHeaders(env: Env, source?: HeadersInit) {
   const incoming = new Headers(source);
   const headers = new Headers();
