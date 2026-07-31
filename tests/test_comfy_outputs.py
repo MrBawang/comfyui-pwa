@@ -1,6 +1,10 @@
 import unittest
 
-from modal_app.workflow_outputs import final_history_file_entries, history_file_entries
+from modal_app.workflow_outputs import (
+    final_history_file_entries,
+    history_file_entries,
+    preferred_upscale_output_nodes,
+)
 
 
 class ComfyOutputTests(unittest.TestCase):
@@ -68,6 +72,41 @@ class ComfyOutputTests(unittest.TestCase):
             [item["filename"] for item in final_history_file_entries(history)],
             ["preview.png"],
         )
+
+    def test_prefers_the_save_node_after_an_upscale_branch(self):
+        workflow = {
+            "10": {"class_type": "KSampler", "inputs": {}},
+            "11": {"class_type": "SaveImage", "inputs": {"images": ["10", 0]}},
+            "12": {
+                "class_type": "UltimateSDUpscale",
+                "inputs": {"image": ["10", 0]},
+            },
+            "13": {"class_type": "SaveImage", "inputs": {"images": ["12", 0]}},
+        }
+        history = {
+            "outputs": {
+                "11": {"images": [{"filename": "base.png", "type": "output"}]},
+                "13": {"images": [{"filename": "upscale.png", "type": "output"}]},
+            }
+        }
+
+        preferred = preferred_upscale_output_nodes(workflow, ["11", "13"])
+        self.assertEqual(preferred, {"13"})
+        self.assertEqual(
+            [item["filename"] for item in final_history_file_entries(history, preferred)],
+            ["upscale.png"],
+        )
+
+    def test_prefers_final_upscale_over_an_intermediate_latent_upscale(self):
+        workflow = {
+            "10": {"class_type": "KSampler", "inputs": {}},
+            "11": {"class_type": "LatentUpscaleBy", "inputs": {"samples": ["10", 0]}},
+            "12": {"class_type": "SaveImage", "inputs": {"images": ["11", 0]}},
+            "13": {"class_type": "UltimateSDUpscale", "inputs": {"image": ["10", 0]}},
+            "14": {"class_type": "SaveImage", "inputs": {"images": ["13", 0]}},
+        }
+
+        self.assertEqual(preferred_upscale_output_nodes(workflow, ["12", "14"]), {"14"})
 
 
 if __name__ == "__main__":

@@ -80,7 +80,11 @@ from modal_app.workflow_conversion import (
     is_canvas_workflow,
     missing_canvas_nodes,
 )
-from modal_app.workflow_outputs import final_history_file_entries, history_file_entries
+from modal_app.workflow_outputs import (
+    final_history_file_entries,
+    history_file_entries,
+    preferred_upscale_output_nodes,
+)
 from modal_app.workflow_store import (
     create_stored_workflow,
     list_stored_workflows,
@@ -853,7 +857,10 @@ class ComfyWorker:
 
             history = self._execute_workflow(workflow, standard_prompt_id(artifact_id))
             all_file_entries = history_file_entries(history)
-            file_entries = final_history_file_entries(history)
+            preferred_outputs = preferred_upscale_output_nodes(
+                workflow, analysis.get("outputNodes", [])
+            )
+            file_entries = final_history_file_entries(history, preferred_outputs)
             if not file_entries:
                 raise RuntimeError("ComfyUI 已完成，但历史记录中没有文件输出")
 
