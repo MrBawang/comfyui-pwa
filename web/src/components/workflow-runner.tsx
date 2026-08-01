@@ -6,6 +6,7 @@ import { costTargets } from "@shared/costs";
 import { AppHeader } from "@/components/app-header";
 import { costHeaders, useCostApproval } from "@/lib/cost-approval";
 import type { JobResponse, StoredWorkflow, WorkflowImageInput, WorkflowParameterInput, WorkflowTextInput } from "@/lib/workflow-contract";
+import { workflowNeedsVideoDurationRefresh } from "@/lib/workflow-contract";
 import { isTerminalJobStatus, parseActiveRunJob, serializeActiveRunJob } from "@/lib/workflow-state";
 import { discardUploads, uploadFile } from "@/lib/uploads";
 
@@ -416,6 +417,7 @@ export function WorkflowRunner({ isMock }: { isMock: boolean }) {
   const activeOutputNodes = selectedVariant?.outputNodes ?? selected?.outputNodes ?? [];
   const defaultModeName = selected?.imageInputs?.length === 1 ? "单图" : "默认模式";
   const activeModeName = selectedVariant?.name ?? defaultModeName;
+  const videoDurationNeedsRefresh = Boolean(selected && workflowNeedsVideoDurationRefresh(selected));
   const activeJobId = job?.status === "processing" ? job.jobId : undefined;
   const jobBusy = job?.status === "uploading" || job?.status === "processing";
   const missingInputs = selected ? activeImageInputs.some((item) => !files[item.fieldName]) : true;
@@ -641,6 +643,13 @@ export function WorkflowRunner({ isMock }: { isMock: boolean }) {
                 <div className="runner-compatibility-note" role="note">
                   <strong>云端兼容模式</strong>
                   <span>{selected.compatibilityAdjustments.map((item) => item.message).join("；")}</span>
+                </div>
+              )}
+              {videoDurationNeedsRefresh && (
+                <div className="runner-compatibility-note" role="note">
+                  <strong>视频时长待启用</strong>
+                  <span>复查当前工作流后即可按秒控制</span>
+                  <Link to="/workflows">前往复查</Link>
                 </div>
               )}
               <div className="runner-input-list">

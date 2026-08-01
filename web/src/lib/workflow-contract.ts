@@ -190,6 +190,27 @@ export interface StoredWorkflow {
   updatedAt: number;
 }
 
+const VIDEO_GENERATOR_NODE_TOKENS = [
+  "imagetovideo",
+  "texttovideo",
+  "latentvideo",
+  "emptyvideo",
+  "videoempty",
+  "wanvideo",
+];
+
+export function workflowNeedsVideoDurationRefresh(workflow: StoredWorkflow) {
+  const hasVideoGenerator = workflow.nodeTypes.some((nodeType) => {
+    const normalized = nodeType.toLowerCase();
+    return VIDEO_GENERATOR_NODE_TOKENS.some((token) => normalized.includes(token));
+  });
+  const parameters = [
+    ...workflow.parameterInputs,
+    ...workflow.variants.flatMap((variant) => variant.parameterInputs),
+  ];
+  return hasVideoGenerator && !parameters.some((item) => item.semantic === "video-duration");
+}
+
 export interface JobOutput {
   index: number;
   filename: string;

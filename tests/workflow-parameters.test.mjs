@@ -10,6 +10,10 @@ const workbenchSource = readFileSync(
   new URL("../web/src/components/workbench.tsx", import.meta.url),
   "utf8",
 );
+const workflowContractSource = readFileSync(
+  new URL("../web/src/lib/workflow-contract.ts", import.meta.url),
+  "utf8",
+);
 
 test("saved workflow parameters are rendered and submitted from the run page", () => {
   assert.match(runnerSource, /cameraParameterInputs[\s\S]*<CameraParameters/);
@@ -27,6 +31,9 @@ test("video duration is entered in seconds and reports its aligned frame count",
   assert.match(runnerSource, /生成时长秒数/);
   assert.match(runnerSource, /alignedSeconds[\s\S]*toFixed\(2\)[\s\S]*帧/);
   assert.match(runnerSource, /videoDurationInputs\.map/);
+  assert.match(workflowContractSource, /workflowNeedsVideoDurationRefresh/);
+  assert.match(workbenchSource, /时长待启用[\s\S]*workflowNeedsVideoDurationRefresh/);
+  assert.match(runnerSource, /视频时长待启用[\s\S]*前往复查/);
 });
 
 test("compatibility changes are disclosed without duplicating failed job errors", () => {

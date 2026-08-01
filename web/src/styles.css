@@ -2346,6 +2346,7 @@ a:focus-visible,
 
 .runner-compatibility-note strong { color: var(--accent); font-size: 0.66rem; }
 .runner-compatibility-note span { color: var(--muted); font-size: 0.61rem; line-height: 1.45; }
+.runner-compatibility-note a { margin-left: auto; color: var(--accent); font-size: 0.62rem; text-decoration: none; white-space: nowrap; }
 
 .runner-input-list { display: flex; flex-direction: column; gap: 8px; padding: 18px; }
 .runner-section-title { display: flex; align-items: center; justify-content: space-between; margin-bottom: 2px; }

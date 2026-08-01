@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { costTargets } from "@shared/costs";
 import { AppHeader } from "@/components/app-header";
 import { costHeaders, useCostApproval } from "@/lib/cost-approval";
+import { workflowNeedsVideoDurationRefresh } from "@/lib/workflow-contract";
 import type {
   MissingNodePackage,
   MissingPythonRuntimePackage,
@@ -1097,9 +1098,9 @@ export function Workbench({ isMock }: { isMock: boolean }) {
                 <div><span className={`stored-status stored-status--${stored.status}`} aria-hidden="true" /><span><strong>{stored.name}</strong><small>{stored.sourceFilename}</small></span></div>
                 <dl><div><dt>节点</dt><dd>{stored.nodeCount}</dd></div><div><dt>模型</dt><dd>{stored.models.length}</dd></div><div><dt>输入</dt><dd>{stored.imageInputs.length}</dd></div></dl>
                 <footer>
-                  <span>{stored.status === "ready" ? "可运行" : "需复查"} · 版本 {stored.revisionId.slice(0, 8)}</span>
+                  <span>{stored.status === "ready" ? workflowNeedsVideoDurationRefresh(stored) ? "可运行 · 时长待启用" : "可运行" : "需复查"} · 版本 {stored.revisionId.slice(0, 8)}</span>
                   {stored.status === "ready" && <Link to={`/?workflow=${stored.id}`}>运行</Link>}
-                  {stored.status === "stale" && (
+                  {(stored.status === "stale" || workflowNeedsVideoDurationRefresh(stored)) && (
                     <button
                       type="button"
                       disabled={Boolean(recheckingId) || Boolean(installingKey) || analyzing}
