@@ -73,6 +73,17 @@ RUNTIME_PARAMETER_INPUTS = {
         "zoom": "缩放",
     }
 }
+VIDEO_FRAME_INPUT_NAMES = {"length", "num_frames", "frame_count", "video_length"}
+VIDEO_FRAME_RATE_INPUT_NAMES = {"frame_rate", "fps"}
+VIDEO_GENERATOR_CLASS_TOKENS = (
+    "imagetovideo",
+    "texttovideo",
+    "latentvideo",
+    "emptyvideo",
+    "videoempty",
+    "wanvideo",
+)
+MAX_VIDEO_DURATION_SECONDS = 10.0
 
 
 def _declared_inputs(node_definition: Any) -> dict[str, Any]:
@@ -149,6 +160,121 @@ def _runtime_parameter(
     return result
 
 
+def _video_frame_rate(
+    workflow: Mapping[str, Mapping[str, Any]], source_node_id: str
+) -> float | None:
+    descendants = {source_node_id}
+    queue = [source_node_id]
+    while queue:
+        current = queue.pop(0)
+        for node_id, node in workflow.items():
+            if node_id in descendants:
+                continue
+            if any(
+                _is_workflow_link(value) and value[0] == current
+                for value in node.get("inputs", {}).values()
+            ):
+                descendants.add(node_id)
+                queue.append(node_id)
+    rates = []
+    for node_id in descendants:
+        node = workflow[node_id]
+        class_name = str(node.get("class_type", "")).casefold()
+        if "video" not in class_name:
+            continue
+        for input_name in VIDEO_FRAME_RATE_INPUT_NAMES:
+            value = node.get("inputs", {}).get(input_name)
+            if (
+                isinstance(value, (int, float))
+                and not isinstance(value, bool)
+                and math.isfinite(value)
+                and value > 0
+            ):
+                rates.append(float(value))
+    return min(rates) if rates else None
+
+
+def _video_duration_parameter(
+    node_id: str,
+    class_type: str,
+    input_name: str,
+    input_definition: Any,
+    current_value: Any,
+    frame_rate: float | None,
+) -> dict[str, Any] | None:
+    normalized_class = class_type.casefold()
+    if (
+        input_name not in VIDEO_FRAME_INPUT_NAMES
+        or frame_rate is None
+        or not any(token in normalized_class for token in VIDEO_GENERATOR_CLASS_TOKENS)
+        or any(token in normalized_class for token in ("load", "save", "combine"))
+        or not isinstance(input_definition, (list, tuple))
+        or not input_definition
+        or input_definition[0] != "INT"
+        or not isinstance(current_value, int)
+        or isinstance(current_value, bool)
+        or current_value < 1
+    ):
+        return None
+    options = (
+        dict(input_definition[1])
+        if len(input_definition) >= 2 and isinstance(input_definition[1], Mapping)
+        else {}
+    )
+    raw_step = options.get("step", 1)
+    frame_step = (
+        raw_step
+        if isinstance(raw_step, int)
+        and not isinstance(raw_step, bool)
+        and raw_step > 0
+        else 1
+    )
+    raw_minimum = options.get("min", 1)
+    minimum_frames = (
+        raw_minimum
+        if isinstance(raw_minimum, int) and not isinstance(raw_minimum, bool)
+        else 1
+    )
+    minimum_frames = max(1, minimum_frames)
+    raw_maximum = options.get("max")
+    maximum_frames = (
+        raw_maximum
+        if isinstance(raw_maximum, int) and not isinstance(raw_maximum, bool)
+        else None
+    )
+    frame_offset = minimum_frames % frame_step
+    if maximum_frames is not None:
+        maximum_frames -= (maximum_frames - frame_offset) % frame_step
+    current_seconds = max(0.0, (current_value - 1) / frame_rate)
+    minimum_seconds = max(frame_step / frame_rate, (minimum_frames - 1) / frame_rate)
+    maximum_seconds = max(MAX_VIDEO_DURATION_SECONDS, current_seconds)
+    if maximum_frames is not None:
+        maximum_seconds = min(
+            maximum_seconds, max(0.0, (maximum_frames - 1) / frame_rate)
+        )
+    if maximum_seconds < minimum_seconds:
+        return None
+    return {
+        "nodeId": node_id,
+        "classType": class_type,
+        "inputName": input_name,
+        "fieldName": f"control_{node_id}_duration_seconds",
+        "label": "生成时长",
+        "kind": "number",
+        "currentValue": round(max(current_seconds, minimum_seconds), 4),
+        "minimum": round(minimum_seconds, 4),
+        "maximum": round(maximum_seconds, 4),
+        "step": round(frame_step / frame_rate, 4),
+        "semantic": "video-duration",
+        "unit": "秒",
+        "framesPerSecond": frame_rate,
+        "frameStep": frame_step,
+        "frameOffset": frame_offset,
+        "minimumFrames": minimum_frames,
+        **({"maximumFrames": maximum_frames} if maximum_frames is not None else {}),
+    }
+
+
 def validate_runtime_parameter_value(item: Mapping[str, Any], value: Any) -> Any:
     kind = item.get("kind")
     if kind == "integer":
@@ -185,6 +311,41 @@ def coerce_runtime_parameter_value(item: Mapping[str, Any], raw_value: str) -> A
     except (TypeError, ValueError) as error:
         raise ValueError(f"参数 {item.get('label', item.get('inputName', ''))} 格式不正确") from error
     return validate_runtime_parameter_value(item, value)
+
+
+def runtime_parameter_workflow_value(item: Mapping[str, Any], value: Any) -> Any:
+    value = validate_runtime_parameter_value(item, value)
+    if item.get("semantic") != "video-duration":
+        return value
+    frame_rate = item.get("framesPerSecond")
+    frame_step = item.get("frameStep")
+    frame_offset = item.get("frameOffset")
+    if (
+        not isinstance(frame_rate, (int, float))
+        or isinstance(frame_rate, bool)
+        or not math.isfinite(frame_rate)
+        or frame_rate <= 0
+        or not isinstance(frame_step, int)
+        or isinstance(frame_step, bool)
+        or frame_step < 1
+        or not isinstance(frame_offset, int)
+        or isinstance(frame_offset, bool)
+        or frame_offset < 0
+        or frame_offset >= frame_step
+    ):
+        raise ValueError("视频时长参数缺少帧率信息")
+    requested_frames = round(float(value) * frame_rate) + 1
+    frames = (
+        round((requested_frames - frame_offset) / frame_step) * frame_step
+        + frame_offset
+    )
+    minimum_frames = item.get("minimumFrames", 1)
+    maximum_frames = item.get("maximumFrames")
+    if isinstance(minimum_frames, int) and not isinstance(minimum_frames, bool):
+        frames = max(frames, minimum_frames)
+    if isinstance(maximum_frames, int) and not isinstance(maximum_frames, bool):
+        frames = min(frames, maximum_frames)
+    return int(frames)
 
 
 def _enum_options(input_definition: Any) -> list[Any] | None:
@@ -429,10 +590,17 @@ def analyze_workflow(
     text_inputs = []
     parameter_inputs = []
     output_nodes = []
-
     for node_id, node in workflow.items():
         class_type = node["class_type"]
         inputs = node["inputs"]
+        video_frame_rate = (
+            _video_frame_rate(workflow, node_id)
+            if any(
+                token in class_type.casefold()
+                for token in VIDEO_GENERATOR_CLASS_TOKENS
+            )
+            else None
+        )
 
         declared_inputs = _declared_inputs(node_info.get(class_type)) if node_info else {}
         upload_fields = []
@@ -490,7 +658,14 @@ def analyze_workflow(
             )
 
         for input_name, input_definition in declared_inputs.items():
-            parameter = _runtime_parameter(
+            parameter = _video_duration_parameter(
+                node_id,
+                class_type,
+                input_name,
+                input_definition,
+                inputs.get(input_name),
+                video_frame_rate,
+            ) or _runtime_parameter(
                 node_id,
                 class_type,
                 input_name,

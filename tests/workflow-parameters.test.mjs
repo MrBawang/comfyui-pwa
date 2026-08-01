@@ -21,6 +21,14 @@ test("saved workflow parameters are rendered and submitted from the run page", (
   assert.match(runnerSource, /parameterValues: submittedParameterValues/);
 });
 
+test("video duration is entered in seconds and reports its aligned frame count", () => {
+  assert.match(runnerSource, /item\.semantic === "video-duration"/);
+  assert.match(runnerSource, /function VideoDurationParameter/);
+  assert.match(runnerSource, /生成时长秒数/);
+  assert.match(runnerSource, /alignedSeconds[\s\S]*toFixed\(2\)[\s\S]*帧/);
+  assert.match(runnerSource, /videoDurationInputs\.map/);
+});
+
 test("compatibility changes are disclosed without duplicating failed job errors", () => {
   assert.match(workbenchSource, /已应用云端兼容调整/);
   assert.match(runnerSource, /云端兼容模式/);

@@ -116,6 +116,45 @@ function RuntimeParameter({ item, value, disabled, onChange }: { item: WorkflowP
   );
 }
 
+function videoFrameCount(item: WorkflowParameterInput, value: string) {
+  const seconds = Number(value);
+  const frameRate = item.framesPerSecond;
+  const frameStep = item.frameStep;
+  const frameOffset = item.frameOffset;
+  if (!Number.isFinite(seconds) || !frameRate || !frameStep || frameOffset === undefined) return undefined;
+  const requestedFrames = Math.round(seconds * frameRate) + 1;
+  let frames = Math.round((requestedFrames - frameOffset) / frameStep) * frameStep + frameOffset;
+  if (item.minimumFrames !== undefined) frames = Math.max(frames, item.minimumFrames);
+  if (item.maximumFrames !== undefined) frames = Math.min(frames, item.maximumFrames);
+  return frames;
+}
+
+function VideoDurationParameter({ item, value, disabled, onChange }: { item: WorkflowParameterInput; value: string; disabled: boolean; onChange: (value: string) => void }) {
+  const numeric = Number(value);
+  const frames = videoFrameCount(item, value);
+  const alignedSeconds = frames !== undefined && item.framesPerSecond
+    ? (frames - 1) / item.framesPerSecond
+    : undefined;
+  const presets = [2, 3, 5, 8, 10].filter(
+    (preset) => (item.minimum === undefined || preset >= item.minimum) && (item.maximum === undefined || preset <= item.maximum),
+  );
+  return (
+    <div className="video-duration-control" role="group" aria-label={item.label}>
+      <div className="video-duration-control__heading">
+        <strong>{item.label}</strong>
+        <span>{frames === undefined || alignedSeconds === undefined ? "请输入有效秒数" : `约 ${alignedSeconds.toFixed(2)} 秒 · ${frames} 帧`}</span>
+      </div>
+      <div className="video-duration-control__inputs">
+        <input type="range" aria-label="生成时长滑块" value={value} min={item.minimum} max={item.maximum} step={item.step ?? "any"} disabled={disabled} onChange={(event) => onChange(event.target.value)} />
+        <label><input type="number" aria-label="生成时长秒数" value={value} min={item.minimum} max={item.maximum} step={item.step ?? "any"} disabled={disabled} onChange={(event) => onChange(event.target.value)} /><span>秒</span></label>
+      </div>
+      {presets.length ? <div className="video-duration-control__presets" aria-label="常用生成时长">
+        {presets.map((preset) => <button key={preset} type="button" aria-pressed={Number.isFinite(numeric) && Math.abs(numeric - preset) < 0.0001} disabled={disabled} onClick={() => onChange(String(preset))}>{preset} 秒</button>)}
+      </div> : null}
+    </div>
+  );
+}
+
 function CameraRangeControl({
   item,
   value,
@@ -361,16 +400,19 @@ export function WorkflowRunner({ isMock }: { isMock: boolean }) {
   const activeImageInputs = selectedVariant?.imageInputs ?? selected?.imageInputs ?? [];
   const activeTextInputs = selectedVariant?.textInputs ?? selected?.textInputs ?? [];
   const activeParameterInputs = selectedVariant?.parameterInputs ?? selected?.parameterInputs ?? [];
+  const videoDurationInputs = activeParameterInputs.filter((item) => item.semantic === "video-duration");
   const cameraParameterInputs = activeParameterInputs.filter(
     (item) => item.classType === CAMERA_NODE_TYPE && CAMERA_CONTROL_NAMES.has(item.inputName),
   );
-  const genericParameterInputs = activeParameterInputs.filter((item) => item.classType !== CAMERA_NODE_TYPE);
+  const genericParameterInputs = activeParameterInputs.filter(
+    (item) => item.classType !== CAMERA_NODE_TYPE && item.semantic !== "video-duration",
+  );
   const fallbackParameterInputs = activeParameterInputs.filter(
     (item) => item.classType === CAMERA_NODE_TYPE
       && !CAMERA_CONTROL_NAMES.has(item.inputName)
       && !HIDDEN_CAMERA_CONTROL_NAMES.has(item.inputName),
   );
-  const visibleParameterInputs = [...cameraParameterInputs, ...fallbackParameterInputs, ...genericParameterInputs];
+  const visibleParameterInputs = [...videoDurationInputs, ...cameraParameterInputs, ...fallbackParameterInputs, ...genericParameterInputs];
   const activeOutputNodes = selectedVariant?.outputNodes ?? selected?.outputNodes ?? [];
   const defaultModeName = selected?.imageInputs?.length === 1 ? "单图" : "默认模式";
   const activeModeName = selectedVariant?.name ?? defaultModeName;
@@ -617,9 +659,15 @@ export function WorkflowRunner({ isMock }: { isMock: boolean }) {
                     {activeTextInputs.map((item) => <TextParameter key={item.fieldName} item={item} value={textValues[item.fieldName] ?? item.currentValue} disabled={jobBusy} onChange={(value) => setTextValues((current) => ({ ...current, [item.fieldName]: value }))} />)}
                   </div>
                 ) : null}
-                {visibleParameterInputs.length ? (
+                {videoDurationInputs.length ? (
                   <div className="runner-parameter-group">
-                    <div className="runner-section-title"><h2>{cameraParameterInputs.length ? "相机视角" : "工作流参数"}</h2><span>{visibleParameterInputs.length} 项</span></div>
+                    <div className="runner-section-title"><h2>视频设置</h2><span>{videoDurationInputs.length} 项</span></div>
+                    {videoDurationInputs.map((item) => <VideoDurationParameter key={item.fieldName} item={item} value={parameterValue(item, parameterValues)} disabled={jobBusy} onChange={(value) => setParameterValues((current) => ({ ...current, [item.fieldName]: value }))} />)}
+                  </div>
+                ) : null}
+                {visibleParameterInputs.length > videoDurationInputs.length ? (
+                  <div className="runner-parameter-group">
+                    <div className="runner-section-title"><h2>{cameraParameterInputs.length ? "相机视角" : "工作流参数"}</h2><span>{visibleParameterInputs.length - videoDurationInputs.length} 项</span></div>
                     {cameraParameterInputs.length ? <CameraParameters items={cameraParameterInputs} values={parameterValues} disabled={jobBusy} onChange={(fieldName, value) => setParameterValues((current) => ({ ...current, [fieldName]: value }))} /> : null}
                     {fallbackParameterInputs.map((item) => <RuntimeParameter key={item.fieldName} item={item} value={parameterValue(item, parameterValues)} disabled={jobBusy} onChange={(value) => setParameterValues((current) => ({ ...current, [item.fieldName]: value }))} />)}
                     {genericParameterInputs.map((item) => <RuntimeParameter key={item.fieldName} item={item} value={parameterValue(item, parameterValues)} disabled={jobBusy} onChange={(value) => setParameterValues((current) => ({ ...current, [item.fieldName]: value }))} />)}

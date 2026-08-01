@@ -62,6 +62,13 @@ export interface WorkflowParameterInput {
   minimum?: number;
   maximum?: number;
   step?: number;
+  semantic?: "video-duration";
+  unit?: string;
+  framesPerSecond?: number;
+  frameStep?: number;
+  frameOffset?: number;
+  minimumFrames?: number;
+  maximumFrames?: number;
 }
 
 export interface WorkflowUnsupportedInput {

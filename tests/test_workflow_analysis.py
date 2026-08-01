@@ -5,6 +5,7 @@ from modal_app.workflow_analysis import (
     analyze_workflow,
     coerce_runtime_parameter_value,
     merge_workflow_resource_findings,
+    runtime_parameter_workflow_value,
     validate_api_workflow,
 )
 
@@ -147,6 +148,142 @@ class WorkflowAnalysisTests(unittest.TestCase):
         self.assertEqual(coerce_runtime_parameter_value(horizontal, "315"), 315)
         with self.assertRaisesRegex(ValueError, "不能大于"):
             coerce_runtime_parameter_value(horizontal, "361")
+
+    def test_exposes_video_seconds_and_converts_them_to_valid_wan_frames(self):
+        workflow = {
+            "50": {
+                "class_type": "WanImageToVideo",
+                "inputs": {"length": 37},
+            },
+            "63": {
+                "class_type": "VHS_VideoCombine",
+                "inputs": {"images": ["50", 0], "frame_rate": 16.0},
+            },
+        }
+        node_info = {
+            "WanImageToVideo": {
+                "input": {
+                    "required": {
+                        "length": ["INT", {"min": 1, "max": 401, "step": 4}]
+                    }
+                },
+                "output": ["IMAGE"],
+                "output_node": False,
+            },
+            "VHS_VideoCombine": {
+                "input": {
+                    "required": {
+                        "images": ["IMAGE"],
+                        "frame_rate": ["FLOAT", {"min": 1, "max": 120}],
+                    }
+                },
+                "output_node": True,
+            },
+        }
+
+        result = analyze_workflow(
+            workflow,
+            installed_nodes=set(node_info),
+            model_exists=lambda _category, _filename: True,
+            node_info=node_info,
+        )
+
+        self.assertTrue(result["runnable"])
+        self.assertEqual(len(result["parameterInputs"]), 1)
+        duration = result["parameterInputs"][0]
+        self.assertEqual(duration["semantic"], "video-duration")
+        self.assertEqual(duration["fieldName"], "control_50_duration_seconds")
+        self.assertEqual(duration["currentValue"], 2.25)
+        self.assertEqual(duration["framesPerSecond"], 16.0)
+        self.assertEqual(duration["step"], 0.25)
+        self.assertEqual(coerce_runtime_parameter_value(duration, "5"), 5.0)
+        self.assertEqual(runtime_parameter_workflow_value(duration, 5.0), 81)
+        with self.assertRaisesRegex(ValueError, "不能大于"):
+            coerce_runtime_parameter_value(duration, "11")
+
+    def test_does_not_expose_unrelated_video_length_as_generation_duration(self):
+        workflow = {
+            "1": {"class_type": "VideoMetadata", "inputs": {"length": 100}},
+            "2": {
+                "class_type": "VHS_VideoCombine",
+                "inputs": {"images": ["1", 0], "frame_rate": 25.0},
+            },
+        }
+        node_info = {
+            "VideoMetadata": {
+                "input": {"required": {"length": ["INT", {"min": 1}]}},
+                "output": ["IMAGE"],
+                "output_node": False,
+            },
+            "VHS_VideoCombine": {
+                "input": {
+                    "required": {
+                        "images": ["IMAGE"],
+                        "frame_rate": ["FLOAT"],
+                    }
+                },
+                "output_node": True,
+            },
+        }
+
+        result = analyze_workflow(workflow, node_info=node_info)
+
+        self.assertEqual(result["parameterInputs"], [])
+
+    def test_video_duration_never_clamps_to_an_invalid_frame_count(self):
+        item = {
+            "label": "生成时长",
+            "kind": "number",
+            "minimum": 0.25,
+            "maximum": 1.0,
+            "semantic": "video-duration",
+            "framesPerSecond": 16.0,
+            "frameStep": 4,
+            "frameOffset": 1,
+            "minimumFrames": 1,
+            "maximumFrames": 13,
+        }
+
+        self.assertEqual(runtime_parameter_workflow_value(item, 1.0), 13)
+        self.assertEqual((runtime_parameter_workflow_value(item, 0.5) - 1) % 4, 0)
+
+    def test_video_duration_uses_the_frame_rate_from_its_own_output_branch(self):
+        workflow = {
+            "10": {"class_type": "WanImageToVideo", "inputs": {"length": 41}},
+            "11": {
+                "class_type": "VHS_VideoCombine",
+                "inputs": {"images": ["10", 0], "frame_rate": 20.0},
+            },
+            "20": {"class_type": "WanImageToVideo", "inputs": {"length": 41}},
+            "21": {
+                "class_type": "VHS_VideoCombine",
+                "inputs": {"images": ["20", 0], "frame_rate": 10.0},
+            },
+        }
+        node_info = {
+            "WanImageToVideo": {
+                "input": {
+                    "required": {"length": ["INT", {"min": 1, "step": 4}]}
+                },
+                "output": ["IMAGE"],
+                "output_node": False,
+            },
+            "VHS_VideoCombine": {
+                "input": {
+                    "required": {
+                        "images": ["IMAGE"],
+                        "frame_rate": ["FLOAT"],
+                    }
+                },
+                "output_node": True,
+            },
+        }
+
+        result = analyze_workflow(workflow, node_info=node_info)
+
+        durations = {item["nodeId"]: item for item in result["parameterInputs"]}
+        self.assertEqual(durations["10"]["currentValue"], 2.0)
+        self.assertEqual(durations["20"]["currentValue"], 4.0)
 
     def test_labels_prompt_by_its_downstream_sampler_role(self):
         workflow = {

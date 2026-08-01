@@ -66,8 +66,8 @@ from modal_app.workflow_analysis import (
     analyze_workflow,
     coerce_runtime_parameter_value,
     merge_workflow_resource_findings,
+    runtime_parameter_workflow_value,
     safe_model_reference,
-    validate_runtime_parameter_value,
 )
 from modal_app.workflow_import import IMAGE_SUFFIXES, load_workflow_document
 from modal_app.workflow_conversion import (
@@ -823,8 +823,9 @@ class ComfyWorker:
             )
         for field_name, value in parameter_values.items():
             item = parameter_input_map[field_name]
-            validate_runtime_parameter_value(item, value)
-            workflow[item["nodeId"]]["inputs"][item["inputName"]] = value
+            workflow[item["nodeId"]]["inputs"][item["inputName"]] = (
+                runtime_parameter_workflow_value(item, value)
+            )
         required_inputs = {item["fieldName"] for item in analysis["imageInputs"]}
         missing_inputs = sorted(required_inputs - set(assets))
         if missing_inputs:
