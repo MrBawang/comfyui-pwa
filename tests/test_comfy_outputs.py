@@ -97,16 +97,34 @@ class ComfyOutputTests(unittest.TestCase):
             ["upscale.png"],
         )
 
-    def test_prefers_final_upscale_over_an_intermediate_latent_upscale(self):
+    def test_krea2_keeps_only_the_final_ultimate_upscale_output(self):
         workflow = {
-            "10": {"class_type": "KSampler", "inputs": {}},
-            "11": {"class_type": "LatentUpscaleBy", "inputs": {"samples": ["10", 0]}},
-            "12": {"class_type": "SaveImage", "inputs": {"images": ["11", 0]}},
-            "13": {"class_type": "UltimateSDUpscale", "inputs": {"image": ["10", 0]}},
-            "14": {"class_type": "SaveImage", "inputs": {"images": ["13", 0]}},
+            "156": {"class_type": "KSampler", "inputs": {}},
+            "203": {
+                "class_type": "LatentUpscaleBy",
+                "inputs": {"samples": ["156", 0]},
+            },
+            "270": {"class_type": "VAEDecode", "inputs": {"samples": ["203", 0]}},
+            "271": {"class_type": "SaveImage", "inputs": {"images": ["270", 0]}},
+            "284": {
+                "class_type": "UltimateSDUpscale",
+                "inputs": {"image": ["270", 0]},
+            },
+            "285": {"class_type": "SaveImage", "inputs": {"images": ["284", 0]}},
+        }
+        history = {
+            "outputs": {
+                "271": {"images": [{"filename": "Krea2-2ST.png", "type": "output"}]},
+                "285": {"images": [{"filename": "Krea2-USD.png", "type": "output"}]},
+            }
         }
 
-        self.assertEqual(preferred_upscale_output_nodes(workflow, ["12", "14"]), {"14"})
+        preferred = preferred_upscale_output_nodes(workflow, ["271", "285"])
+        self.assertEqual(preferred, {"285"})
+        self.assertEqual(
+            [item["filename"] for item in final_history_file_entries(history, preferred)],
+            ["Krea2-USD.png"],
+        )
 
 
 if __name__ == "__main__":
